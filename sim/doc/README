@@ -1,0 +1,3 @@
+scanner simulation.
+assumes libode and drawstuff (avail if ode compiled from sources) is
+installed in $HOME/install.
