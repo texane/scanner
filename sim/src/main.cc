@@ -56,7 +56,9 @@ static const dReal lazer_vel = 0.3;
 static dBody* lazer_body;
 static dGeom* lazer_geom;
 
-static const dReal scanned_radius = 0.35;
+#define CONFIG_SCANNED_SPHERE 0
+#define CONFIG_SCANNED_BOX 1
+static const dReal scanned_radius = 0.5;
 static dBody* scanned_body;
 static dGeom* scanned_geom;
 
@@ -71,52 +73,6 @@ static void simule_lazer(void)
   if ((pos[2] <= (2 * hax_radius + 0.02)) || (pos[2] >= (vax_length)))
     lazer_body->setLinearVel(vel[0], vel[1], vel[2] * -1);
 }
-
-static inline dReal rps_to_vel(dReal);
-__attribute__((unused))
-static void simule_rotor(void)
-{
-#if 0
-
-  // wait for stabilized speed
-  static unsigned int pass = 0;
-  if (++pass < 20) return ;
-
-  static dReal prev_vel = 0;
-
-  // correct body position and rotation
-  const dReal* const vel = rax_body->getAngularVel();
-
-  if (pass == 20) prev_vel = vel[2];
-
-  dReal new_vel = vel[2];
-  if (fabs(new_vel - prev_vel) > 0.01)
-  {
-    printf("diff: %f\n", new_vel - prev_vel);
-    new_vel += new_vel - prev_vel;
-    rax_body->setAngularVel(vel[0], vel[1], new_vel);
-  }
-
-  prev_vel = new_vel;
-
-#endif
-
-//   dBodyID bodyID = rax_body->id();
-//   const dReal *rot = dBodyGetAngularVel( bodyID );
-//   const dReal *quat_ptr;
-//   dReal quat[4], quat_len;
-//   quat_ptr = dBodyGetQuaternion( bodyID );
-//   quat[0] = quat_ptr[0];
-//   quat[1] = 0;
-//   quat[2] = 0; 
-//   quat[3] = quat_ptr[3]; 
-//   quat_len = sqrt( quat[0] * quat[0] + quat[3] * quat[3] );
-//   quat[0] /= quat_len;
-//   quat[3] /= quat_len;
-//   dBodySetQuaternion( bodyID, quat );
-//   dBodySetAngularVel( bodyID, 0, 0, rot[2] );
-}
-
 
 typedef dReal real_type;
 
@@ -148,8 +104,7 @@ static inline real_type get_z_angle(const real_type* r)
   // http://www.codeguru.com/forum/archive/index.php/t-329530.html
 
   // atan2 returns in [-pi, pi]
-  const real_type a = atan2(r[4], r[0]);
-  return a + M_PI;
+  return atan2(r[4], r[0]) + M_PI;
 }
 
 static inline dReal rtod(dReal);
@@ -197,7 +152,6 @@ static void simule_sampling(void)
 
 static void simule(void)
 {
-  simule_rotor();
   simule_lazer();
   simule_sampling();
 
@@ -211,8 +165,15 @@ static void simule(void)
 static void draw_scanned(void)
 {
   dsSetColor(0.4, 0.4, 0);
+#if CONFIG_SCANNED_SPHERE
   dsDrawSphere
     (scanned_body->getPosition(), scanned_body->getRotation(), scanned_radius);
+#elif CONFIG_SCANNED_BOX
+  dVector3 sides;
+  dGeomBoxGetLengths(*scanned_geom, sides);
+  dsDrawBox  
+    (scanned_body->getPosition(), scanned_body->getRotation(), sides);
+#endif
 }
 
 static void draw_vax(void)
@@ -359,7 +320,7 @@ static void initialize(void)
     dRSetIdentity(R);
     rax_body->setRotation(R);
     rax_body->setPosition(0, 0, rax_length / 2);
-    rax_body->setAngularVel(0, 0, rps_to_vel(5));
+    rax_body->setAngularVel(0, 0, rps_to_vel(1));
     rax_body->setLinearVel(0, 0, 0);
   }
 
@@ -405,10 +366,20 @@ static void initialize(void)
   {
     scanned_body = new dBody(*world);
     dMass mass;
+#if CONFIG_SCANNED_SPHERE
     mass.setSphereTotal(0.00001, scanned_radius);
+#elif CONFIG_SCANNED_BOX
+    mass.setBoxTotal
+      (0.00001, scanned_radius, scanned_radius, scanned_radius);
+#endif
     scanned_body->setMass(mass);
 
+#if CONFIG_SCANNED_SPHERE
     scanned_geom = new dSphere(*space, scanned_radius);
+#elif CONFIG_SCANNED_BOX
+    scanned_geom = new dBox
+      (*space, scanned_radius, scanned_radius, scanned_radius);
+#endif
     scanned_geom->setBody(*scanned_body);
 
     dMatrix3 R;
