@@ -6,6 +6,7 @@
 
 #ifdef dDOUBLE
 # define dsDrawCylinder dsDrawCylinderD
+# define dsDrawSphere dsDrawSphereD
 #endif
 
 
@@ -51,6 +52,9 @@ static const dReal lazer_length = 1.5;
 static const dReal lazer_radius = 0.002;
 static const dReal lazer_vel = 0.3;
 static dBody* lazer_body;
+
+static const dReal scanned_radius = 0.1;
+static dBody* scanned_body;
 
 // simulation
 
@@ -121,6 +125,13 @@ static void simule(void)
 
 // drawing
 
+static void draw_scanned(void)
+{
+  dsSetColor(0.4, 0.4, 0);
+  dsDrawSphere
+    (scanned_body->getPosition(), scanned_body->getRotation(), scanned_radius);
+}
+
 static void draw_vax(void)
 {
   dsSetColor(0, 0.2, 0.8f);
@@ -162,6 +173,7 @@ static void redraw(void)
   draw_vax();
   draw_rax();
   draw_sax();
+  draw_scanned();
   draw_lazer();
 }
 
@@ -303,6 +315,24 @@ static void initialize(void)
     lazer_body->setPosition(0, -0.25, vax_length / 2);
     lazer_body->setAngularVel(0, 0, 0);
     lazer_body->setLinearVel(0, 0, lazer_vel);
+  }
+
+  // create the scanned object
+  {
+    scanned_body = new dBody(*world);
+    dMass mass;
+    mass.setSphereTotal(0.00001, scanned_radius);
+    scanned_body->setMass(mass);
+
+    dGeom* const geom = new dSphere(*space, scanned_radius);
+    geom->setBody(*scanned_body);
+
+    dMatrix3 R;
+    dRSetIdentity(R);
+    scanned_body->setRotation(R);
+    scanned_body->setPosition(0, 0, vax_length / 2);
+    scanned_body->setAngularVel(0, 0, 0);
+    scanned_body->setLinearVel(0, 0, 0);
   }
 
 #if 0  // create sax, env fixed joint
