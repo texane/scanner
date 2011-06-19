@@ -120,12 +120,16 @@ static void simule_rotor(void)
 
 typedef dReal real_type;
 
-typedef struct triple
+static inline void ahdr_to_xyz
+(const real_type* ahdr, real_type* xyz)
 {
-  real_type height; // ray height
-  real_type depth; // ray depth
-  real_type alpha; // axis angle
-} triple_t;
+  // had the angle, heigth, depth, radius tuple
+  // xyz the absolute cartesian coords
+
+  xyz[0] = (ahdr[3] - ahdr[2]) * cos(ahdr[0]);
+  xyz[1] = (ahdr[3] - ahdr[2]) * sin(ahdr[0]);
+  xyz[2] = (ahdr[1]);
+}
 
 static inline real_type compute_distance
 (const real_type* a, const real_type* b)
@@ -138,7 +142,9 @@ static inline real_type compute_distance
 
 static inline real_type get_z_angle(const real_type* r)
 {
-  // r the rotation matrix
+  // z angle from rotation matrix r
+  // http://www.codeguru.com/forum/archive/index.php/t-329530.html
+
   // atan2 returns in [-pi, pi]
   const real_type a = atan2(r[4], r[0]);
   return a + M_PI;
@@ -163,22 +169,28 @@ static void simule_sampling(void)
   // the cyliner pos must be converted to the lazer pos
   real_type lazer_pos[3] = { vax_pos[0], vax_pos[1], lazer_body_pos[2] };
 
+#if 0 // unused
   printf("contact_count == %d\n", contact_count);
-  printf("{\n");
+#endif // unused
 
   for (int i = 0; i < contact_count; ++i)
   {
     dContactGeom& c = contacts[i];
 
-    // triple
-    const real_type h = lazer_pos[2];
-    const real_type a = get_z_angle(rax_rot);
-    const real_type d = compute_distance(lazer_pos, c.pos);
+    // ahdr tuple
+    real_type ahdr[4];
+    ahdr[0] = get_z_angle(rax_rot);
+    ahdr[1] = lazer_pos[2];
+    ahdr[2] = compute_distance(lazer_pos, c.pos);
+    ahdr[3] = hax_length;
 
-    printf("%f %f %f\n", h, rtod(a), d);
+    // convert to xyz
+    real_type xyz[3];
+    ahdr_to_xyz(ahdr, xyz);
+
+    printf("%f %f %f\n", xyz[0], xyz[1], xyz[2]);
+    fflush(stdout);
   }
-
-  printf("}\n");
 }
 
 static void simule(void)
