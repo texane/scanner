@@ -1,4 +1,5 @@
 #include <vector>
+#include <math.h>
 
 #include <ode/ode.h>
 #include <drawstuff/drawstuff.h>
@@ -43,6 +44,7 @@ static dBody* hax_body;
 static const dReal rax_radius = 0.01;
 static const dReal rax_length = 0.1;
 static dBody* rax_body;
+static dGeom* rax_geom;
 
 static const dReal sax_radius = 0.03;
 static const dReal sax_length = 0.01;
@@ -50,11 +52,13 @@ static dBody* sax_body;
 
 static const dReal lazer_length = 1.5;
 static const dReal lazer_radius = 0.002;
-static const dReal lazer_vel = 0.3;
+static const dReal lazer_vel = 0.1;
 static dBody* lazer_body;
+static dGeom* lazer_geom;
 
-static const dReal scanned_radius = 0.1;
+static const dReal scanned_radius = 0.35;
 static dBody* scanned_body;
+static dGeom* scanned_geom;
 
 // simulation
 
@@ -113,10 +117,78 @@ static void simule_rotor(void)
 //   dBodySetAngularVel( bodyID, 0, 0, rot[2] );
 }
 
+
+typedef dReal real_type;
+
+typedef struct triple
+{
+  real_type height; // ray height
+  real_type depth; // ray depth
+  real_type alpha; // axis angle
+} triple_t;
+
+static inline real_type compute_distance
+(const real_type* a, const real_type* b)
+{
+  const real_type dx = a[0] - b[0];
+  const real_type dy = a[1] - b[1];
+  const real_type dz = a[2] - b[2];
+  return sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+static inline real_type get_z_angle(const real_type* r)
+{
+  // r the rotation matrix
+  // atan2 returns in [-pi, pi]
+  const real_type a = atan2(r[4], r[0]);
+  return a + M_PI;
+}
+
+static inline dReal rtod(dReal);
+
+static void simule_sampling(void)
+{
+  static const int contact_size = 32;
+
+  dContactGeom contacts[contact_size];
+  
+  const int contact_count = dCollide
+    (*lazer_geom, *scanned_geom, contact_size, contacts, sizeof(dContactGeom));
+
+  if (contact_count == 0) return ;
+
+  const dReal* const rax_rot = rax_body->getRotation();
+  const dReal* const vax_pos = vax_body->getPosition();
+  const dReal* const lazer_body_pos = lazer_body->getPosition();
+  // the cyliner pos must be converted to the lazer pos
+  real_type lazer_pos[3] = { vax_pos[0], vax_pos[1], lazer_body_pos[2] };
+
+  printf("contact_count == %d\n", contact_count);
+  printf("{\n");
+
+  for (int i = 0; i < contact_count; ++i)
+  {
+    dContactGeom& c = contacts[i];
+
+    // triple
+    const real_type h = lazer_pos[2];
+    const real_type a = get_z_angle(rax_rot);
+    const real_type d = compute_distance(lazer_pos, c.pos);
+
+    printf("%f %f %f\n", h, rtod(a), d);
+  }
+
+  printf("}\n");
+}
+
 static void simule(void)
 {
   simule_rotor();
   simule_lazer();
+
+  static unsigned int pass = 0;
+  if ((++pass & (8 - 1)) == 0)
+    simule_sampling();
 
   // stepsize in second
   dWorldStep(*world, 0.05);
@@ -269,8 +341,8 @@ static void initialize(void)
     mass.setCylinderTotal(1, 3, rax_radius, rax_length);
     rax_body->setMass(mass);
 
-    dGeom* const geom = new dCylinder(*space, rax_radius, rax_length);
-    geom->setBody(*rax_body);
+    rax_geom = new dCylinder(*space, rax_radius, rax_length);
+    rax_geom->setBody(*rax_body);
 
     dMatrix3 R;
     dRSetIdentity(R);
@@ -305,8 +377,9 @@ static void initialize(void)
     mass.setCylinderTotal(0.000001, 3, lazer_radius, lazer_length);
     lazer_body->setMass(mass);
 
-    dGeom* const geom = new dCylinder(*space, lazer_radius, lazer_length);
-    geom->setBody(*lazer_body);
+    // lazer_geom = new dCylinder(*space, lazer_radius, lazer_length);
+    lazer_geom = new dRay(*space, lazer_length);
+    lazer_geom->setBody(*lazer_body);
 
     dMatrix3 R;
     dRSetIdentity(R);
@@ -324,8 +397,8 @@ static void initialize(void)
     mass.setSphereTotal(0.00001, scanned_radius);
     scanned_body->setMass(mass);
 
-    dGeom* const geom = new dSphere(*space, scanned_radius);
-    geom->setBody(*scanned_body);
+    scanned_geom = new dSphere(*space, scanned_radius);
+    scanned_geom->setBody(*scanned_body);
 
     dMatrix3 R;
     dRSetIdentity(R);
