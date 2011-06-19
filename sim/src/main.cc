@@ -51,14 +51,14 @@ static const dReal sax_length = 0.01;
 static dBody* sax_body;
 
 static const dReal lazer_length = 1.5;
-static const dReal lazer_radius = 0.002;
+static const dReal lazer_radius = 0.001;
 static const dReal lazer_vel = 0.3;
 static dBody* lazer_body;
 static dGeom* lazer_geom;
 
 #define CONFIG_SCANNED_SPHERE 0
 #define CONFIG_SCANNED_BOX 1
-static const dReal scanned_radius = 0.5;
+static const dReal scanned_radius = 0.2;
 static dBody* scanned_body;
 static dGeom* scanned_geom;
 
@@ -126,28 +126,41 @@ static void simule_sampling(void)
   // the cyliner pos must be converted to the lazer pos
   real_type lazer_pos[3] = { vax_pos[0], vax_pos[1], lazer_body_pos[2] };
 
-#if 0 // unused
-  printf("contact_count == %d\n", contact_count);
-#endif // unused
-
+  // filter and find the nearest one
+  real_type nearest_d = 0;
+  int nearest_i = -1;
   for (int i = 0; i < contact_count; ++i)
   {
     dContactGeom& c = contacts[i];
 
-    // ahdr tuple
-    real_type ahdr[4];
-    ahdr[0] = get_z_angle(rax_rot);
-    ahdr[1] = lazer_pos[2];
-    ahdr[2] = compute_distance(lazer_pos, c.pos);
-    ahdr[3] = hax_length;
+    // filter unwanted objects, wont happen in real
+    if ((c.g1 != *scanned_geom) && (c.g2 != *scanned_geom))
+      continue ;
 
-    // convert to xyz
-    real_type xyz[3];
-    ahdr_to_xyz(ahdr, xyz);
-
-    printf("%f %f %f\n", xyz[0], xyz[1], xyz[2]);
-    fflush(stdout);
+    const real_type d = compute_distance(lazer_pos, c.pos);
+    if ((nearest_i == -1) || (d < nearest_d))
+    {
+      nearest_i = i;
+      nearest_d = d;
+    }
   }
+
+  // not found
+  if (nearest_i == -1) return ;
+
+  // ahdr tuple
+  real_type ahdr[4];
+  ahdr[0] = get_z_angle(rax_rot);
+  ahdr[1] = lazer_pos[2];
+  ahdr[2] = nearest_d;
+  ahdr[3] = hax_length;
+
+  // convert to xyz
+  real_type xyz[3];
+  ahdr_to_xyz(ahdr, xyz);
+
+  printf("%f %f %f\n", xyz[0], xyz[1], xyz[2]);
+  fflush(stdout);
 }
 
 static void simule(void)
@@ -349,8 +362,11 @@ static void initialize(void)
     mass.setCylinderTotal(0.000001, 3, lazer_radius, lazer_length);
     lazer_body->setMass(mass);
 
-    // lazer_geom = new dCylinder(*space, lazer_radius, lazer_length);
+#if 0 // CONFIG_USE_RAY
     lazer_geom = new dRay(*space, lazer_length);
+#else
+    lazer_geom = new dCylinder(*space, lazer_radius, lazer_length);
+#endif // CONFIG_USE_RAY
     lazer_geom->setBody(*lazer_body);
 
     dMatrix3 R;
@@ -360,6 +376,16 @@ static void initialize(void)
     lazer_body->setPosition(0, -0.25, vax_length / 2);
     lazer_body->setAngularVel(0, 0, 0);
     lazer_body->setLinearVel(0, 0, lazer_vel);
+
+#if 0 // CONFIG_USE_RAY
+    // adjust the ray
+    dVector3 pos, dir;
+    dGeomRayGet(*lazer_geom, pos, dir);
+    dir[1] = -1;
+    dGeomRaySet(*lazer_geom, pos[0], pos[1], pos[2], dir[0], dir[1], dir[2]);
+    dGeomRayGet(*lazer_geom, pos, dir);
+    printf("%f %f %f, %f %f %f\n", pos[0], pos[1], pos[2], dir[0], dir[1], dir[2]);
+#endif // CONFIG_USE_RAY
   }
 
   // create the scanned object
