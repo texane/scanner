@@ -52,7 +52,7 @@ static dBody* sax_body;
 
 static const dReal lazer_length = 1.5;
 static const dReal lazer_radius = 0.002;
-static const dReal lazer_vel = 0.1;
+static const dReal lazer_vel = 0.3;
 static dBody* lazer_body;
 static dGeom* lazer_geom;
 
@@ -123,12 +123,14 @@ typedef dReal real_type;
 static inline void ahdr_to_xyz
 (const real_type* ahdr, real_type* xyz)
 {
-  // had the angle, heigth, depth, radius tuple
+  // hadr the angle, heigth, depth, radius tuple
   // xyz the absolute cartesian coords
 
-  xyz[0] = (ahdr[3] - ahdr[2]) * cos(ahdr[0]);
-  xyz[1] = (ahdr[3] - ahdr[2]) * sin(ahdr[0]);
-  xyz[2] = (ahdr[1]);
+  const real_type d = ahdr[3] - ahdr[2];
+
+  xyz[0] = d * cos(ahdr[0]);
+  xyz[1] = ahdr[1];
+  xyz[2] = d * sin(ahdr[0]);
 }
 
 static inline real_type compute_distance
@@ -197,10 +199,7 @@ static void simule(void)
 {
   simule_rotor();
   simule_lazer();
-
-  static unsigned int pass = 0;
-  if ((++pass & (8 - 1)) == 0)
-    simule_sampling();
+  simule_sampling();
 
   // stepsize in second
   dWorldStep(*world, 0.05);
