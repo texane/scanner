@@ -5,4 +5,4 @@ g++ \
 -DdSINGLE=1 \
 -I$HOME/install/include \
 ../src/main.cc \
--L$HOME/install/lib -ldrawstuff -lode -lGL -lGLU -lm
+-L$HOME/install/lib -ldrawstuff -lode -lGL -lGLU -lm -lX11

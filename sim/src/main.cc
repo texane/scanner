@@ -1,3 +1,8 @@
+// static configuration
+#define CONFIG_SCANNED_SPHERE 0
+#define CONFIG_SCANNED_BOX 1
+#define CONFIG_DRAW_CONTACTS 1
+
 #include <vector>
 #include <math.h>
 
@@ -9,6 +14,9 @@
 # define dsDrawCylinder dsDrawCylinderD
 # define dsDrawSphere dsDrawSphereD
 #endif
+
+
+typedef dReal real_type;
 
 
 static void start(void)
@@ -56,11 +64,55 @@ static const dReal lazer_vel = 0.3;
 static dBody* lazer_body;
 static dGeom* lazer_geom;
 
-#define CONFIG_SCANNED_SPHERE 0
-#define CONFIG_SCANNED_BOX 1
 static const dReal scanned_radius = 0.2;
 static dBody* scanned_body;
 static dGeom* scanned_geom;
+
+
+#if CONFIG_DRAW_CONTACTS
+
+#include <list>
+
+std::list<dBody*> contact_bodies;
+
+static const real_type contact_radius = 0.01;
+
+static void add_contact(const real_type* pos)
+{
+  dBody* const body = new dBody(*world);
+  dMass mass;
+  mass.setBoxTotal
+    (0.00001, contact_radius, contact_radius, contact_radius);
+  body->setMass(mass);
+
+  dGeom* const geom = new dBox
+    (*space, contact_radius, contact_radius, contact_radius);
+  geom->setBody(*body);
+
+  dMatrix3 R;
+  dRSetIdentity(R);
+  body->setRotation(R);
+  body->setPosition(pos[0], pos[1], pos[2]);
+  body->setAngularVel(0, 0, 0);
+  body->setLinearVel(0, 0, 0);
+
+  contact_bodies.push_back(body);
+}
+
+static void draw_contacts(void)
+{
+  dVector3 sides = { contact_radius, contact_radius, contact_radius };
+
+  dsSetColor(0, 1, 0);
+
+  std::list<dBody*>::const_iterator pos = contact_bodies.begin();
+  std::list<dBody*>::const_iterator end = contact_bodies.end();
+  for (; pos != end; ++pos)
+    dsDrawBox ((*pos)->getPosition(), (*pos)->getRotation(), sides);
+}
+
+#endif // CONFIG_DRAW_CONTACTS
+
 
 // simulation
 
@@ -73,8 +125,6 @@ static void simule_lazer(void)
   if ((pos[2] <= (2 * hax_radius + 0.02)) || (pos[2] >= (vax_length)))
     lazer_body->setLinearVel(vel[0], vel[1], vel[2] * -1);
 }
-
-typedef dReal real_type;
 
 static inline void ahdr_to_xyz
 (const real_type* ahdr, real_type* xyz)
@@ -133,10 +183,6 @@ static void simule_sampling(void)
   {
     dContactGeom& c = contacts[i];
 
-    // filter unwanted objects, wont happen in real
-    if ((c.g1 != *scanned_geom) && (c.g2 != *scanned_geom))
-      continue ;
-
     const real_type d = compute_distance(lazer_pos, c.pos);
     if ((nearest_i == -1) || (d < nearest_d))
     {
@@ -161,6 +207,12 @@ static void simule_sampling(void)
 
   printf("%f %f %f\n", xyz[0], xyz[1], xyz[2]);
   fflush(stdout);
+
+#if CONFIG_DRAW_CONTACTS
+  // turn xyz into the world coords
+  real_type xyz_trans[3] = { -xyz[2], xyz[0], xyz[1] };
+  add_contact(xyz_trans);
+#endif // CONFIG_DRAW_CONTACTS
 }
 
 static void simule(void)
@@ -177,7 +229,7 @@ static void simule(void)
 
 static void draw_scanned(void)
 {
-  dsSetColor(0.4, 0.4, 0);
+  dsSetColor(0.9, 0.9, 0.9);
 #if CONFIG_SCANNED_SPHERE
   dsDrawSphere
     (scanned_body->getPosition(), scanned_body->getRotation(), scanned_radius);
@@ -232,6 +284,10 @@ static void redraw(void)
   draw_sax();
   draw_scanned();
   draw_lazer();
+
+#if CONFIG_DRAW_CONTACTS
+  draw_contacts();
+#endif // CONFIG_DRAW_CONTACTS
 }
 
 static void step(int)
@@ -393,7 +449,7 @@ static void initialize(void)
     scanned_body = new dBody(*world);
     dMass mass;
 #if CONFIG_SCANNED_SPHERE
-    mass.setSphereTotal(0.00001, scanned_radius);
+    mass.setSphereTotal(0.001, scanned_radius);
 #elif CONFIG_SCANNED_BOX
     mass.setBoxTotal
       (0.00001, scanned_radius, scanned_radius, scanned_radius);
