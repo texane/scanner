@@ -183,6 +183,14 @@ static void simule_sampling(void)
   {
     dContactGeom& c = contacts[i];
 
+#if 0 // unused
+    const real_type* const body_pos = dGeomGetPosition(c.g1);
+    real_type contact_pos[3];
+    contact_pos[0] = body_pos[0] + c.normal[0] * c.depth;
+    contact_pos[1] = body_pos[1] + c.normal[1] * c.depth;
+    contact_pos[2] = body_pos[2] + c.normal[2] * c.depth;
+#endif // unused
+
     const real_type d = compute_distance(lazer_pos, c.pos);
     if ((nearest_i == -1) || (d < nearest_d))
     {
@@ -449,7 +457,7 @@ static void initialize(void)
     scanned_body = new dBody(*world);
     dMass mass;
 #if CONFIG_SCANNED_SPHERE
-    mass.setSphereTotal(0.001, scanned_radius);
+    mass.setSphereTotal(0.00001, scanned_radius);
 #elif CONFIG_SCANNED_BOX
     mass.setBoxTotal
       (0.00001, scanned_radius, scanned_radius, scanned_radius);
