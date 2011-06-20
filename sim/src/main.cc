@@ -19,6 +19,16 @@
 typedef dReal real_type;
 
 
+// sharp ir sensor
+
+__attribute__((unused))
+static real_type sharpir_dtov(real_type d)
+{
+  // return the voltage given the distance
+  return 0;
+}
+
+
 static void start(void)
 {
   static float xyz[3] = {-2, 0, 1.50};
@@ -58,11 +68,11 @@ static const dReal sax_radius = 0.03;
 static const dReal sax_length = 0.01;
 static dBody* sax_body;
 
-static const dReal lazer_length = 1.5;
-static const dReal lazer_radius = 0.001;
-static const dReal lazer_vel = 0.3;
-static dBody* lazer_body;
-static dGeom* lazer_geom;
+static const dReal ray_length = 1.5;
+static const dReal ray_radius = 0.001;
+static const dReal ray_vel = 0.3;
+static dBody* ray_body;
+static dGeom* ray_geom;
 
 static const dReal scanned_radius = 0.2;
 static dBody* scanned_body;
@@ -116,14 +126,14 @@ static void draw_contacts(void)
 
 // simulation
 
-static void simule_lazer(void)
+static void simule_ray(void)
 {
-  // move the lazer up
-  const dReal* const pos = lazer_body->getPosition();
-  const dReal* const vel = lazer_body->getLinearVel();
+  // move the ray up
+  const dReal* const pos = ray_body->getPosition();
+  const dReal* const vel = ray_body->getLinearVel();
 
   if ((pos[2] <= (2 * hax_radius + 0.02)) || (pos[2] >= (vax_length)))
-    lazer_body->setLinearVel(vel[0], vel[1], vel[2] * -1);
+    ray_body->setLinearVel(vel[0], vel[1], vel[2] * -1);
 }
 
 static inline void ahdr_to_xyz
@@ -166,15 +176,15 @@ static void simule_sampling(void)
   dContactGeom contacts[contact_size];
   
   const int contact_count = dCollide
-    (*lazer_geom, *scanned_geom, contact_size, contacts, sizeof(dContactGeom));
+    (*ray_geom, *scanned_geom, contact_size, contacts, sizeof(dContactGeom));
 
   if (contact_count == 0) return ;
 
   const dReal* const rax_rot = rax_body->getRotation();
   const dReal* const vax_pos = vax_body->getPosition();
-  const dReal* const lazer_body_pos = lazer_body->getPosition();
-  // the cyliner pos must be converted to the lazer pos
-  real_type lazer_pos[3] = { vax_pos[0], vax_pos[1], lazer_body_pos[2] };
+  const dReal* const ray_body_pos = ray_body->getPosition();
+  // the cyliner pos must be converted to the ray pos
+  real_type ray_pos[3] = { vax_pos[0], vax_pos[1], ray_body_pos[2] };
 
   // filter and find the nearest one
   real_type nearest_d = 0;
@@ -191,7 +201,7 @@ static void simule_sampling(void)
     contact_pos[2] = body_pos[2] + c.normal[2] * c.depth;
 #endif // unused
 
-    const real_type d = compute_distance(lazer_pos, c.pos);
+    const real_type d = compute_distance(ray_pos, c.pos);
     if ((nearest_i == -1) || (d < nearest_d))
     {
       nearest_i = i;
@@ -205,7 +215,7 @@ static void simule_sampling(void)
   // ahdr tuple
   real_type ahdr[4];
   ahdr[0] = get_z_angle(rax_rot);
-  ahdr[1] = lazer_pos[2];
+  ahdr[1] = ray_pos[2];
   ahdr[2] = nearest_d;
   ahdr[3] = hax_length;
 
@@ -225,7 +235,7 @@ static void simule_sampling(void)
 
 static void simule(void)
 {
-  simule_lazer();
+  simule_ray();
   simule_sampling();
 
   // stepsize in second
@@ -277,11 +287,12 @@ static void draw_sax(void)
     (sax_body->getPosition(), sax_body->getRotation(), sax_length, sax_radius);
 }
 
-static void draw_lazer(void)
+static void draw_ray(void)
 {
   dsSetColor(1.0f, 0.0f, 0.0f);
   dsDrawCylinder
-    (lazer_body->getPosition(), lazer_body->getRotation(), lazer_length, lazer_radius);
+    (ray_body->getPosition(), ray_body->getRotation(),
+     ray_length, ray_radius);
 }
 
 static void redraw(void)
@@ -291,7 +302,7 @@ static void redraw(void)
   draw_rax();
   draw_sax();
   draw_scanned();
-  draw_lazer();
+  draw_ray();
 
 #if CONFIG_DRAW_CONTACTS
   draw_contacts();
@@ -419,35 +430,35 @@ static void initialize(void)
     sax_body->setLinearVel(0, 0, 0);
   }
 
-  // create lazer
+  // create ray
   {
-    lazer_body = new dBody(*world);
+    ray_body = new dBody(*world);
     dMass mass;
-    mass.setCylinderTotal(0.000001, 3, lazer_radius, lazer_length);
-    lazer_body->setMass(mass);
+    mass.setCylinderTotal(0.000001, 3, ray_radius, ray_length);
+    ray_body->setMass(mass);
 
 #if 0 // CONFIG_USE_RAY
-    lazer_geom = new dRay(*space, lazer_length);
+    ray_geom = new dRay(*space, ray_length);
 #else
-    lazer_geom = new dCylinder(*space, lazer_radius, lazer_length);
+    ray_geom = new dCylinder(*space, ray_radius, ray_length);
 #endif // CONFIG_USE_RAY
-    lazer_geom->setBody(*lazer_body);
+    ray_geom->setBody(*ray_body);
 
     dMatrix3 R;
     dRSetIdentity(R);
     dRFromAxisAndAngle(R, 1, 0, 0, dtor(90));
-    lazer_body->setRotation(R);
-    lazer_body->setPosition(0, -0.25, vax_length / 2);
-    lazer_body->setAngularVel(0, 0, 0);
-    lazer_body->setLinearVel(0, 0, lazer_vel);
+    ray_body->setRotation(R);
+    ray_body->setPosition(0, -0.25, vax_length / 2);
+    ray_body->setAngularVel(0, 0, 0);
+    ray_body->setLinearVel(0, 0, ray_vel);
 
 #if 0 // CONFIG_USE_RAY
     // adjust the ray
     dVector3 pos, dir;
-    dGeomRayGet(*lazer_geom, pos, dir);
+    dGeomRayGet(*ray_geom, pos, dir);
     dir[1] = -1;
-    dGeomRaySet(*lazer_geom, pos[0], pos[1], pos[2], dir[0], dir[1], dir[2]);
-    dGeomRayGet(*lazer_geom, pos, dir);
+    dGeomRaySet(*ray_geom, pos[0], pos[1], pos[2], dir[0], dir[1], dir[2]);
+    dGeomRayGet(*ray_geom, pos, dir);
     printf("%f %f %f, %f %f %f\n", pos[0], pos[1], pos[2], dir[0], dir[1], dir[2]);
 #endif // CONFIG_USE_RAY
   }
@@ -545,10 +556,10 @@ static void initialize(void)
 #endif
 
 #if 1
-  // create vax, lazer slide joint
+  // create vax, ray slide joint
   {
     dJointID joint = dJointCreateSlider(*world, 0);
-    dJointAttach(joint, *vax_body, *lazer_body);
+    dJointAttach(joint, *vax_body, *ray_body);
     dJointSetSliderAxis(joint, 0, 0, 1);
   }
 #endif
