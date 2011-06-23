@@ -6,7 +6,7 @@ static const int VertexCount = 453;
 static const int IndexCount = 902 * 3;
 
 
-static const float Vertices[VertexCount * 3] = {
+static float Vertices[VertexCount * 3] = {
         -0.334392f, 0.133007f, 0.062259f,
 	-0.350189f, 0.150354f, -0.147769f,
 	-0.234201f, 0.343811f, -0.174307f,

@@ -4,6 +4,7 @@
 #define CONFIG_SCANNED_BUNNY 1
 #define CONFIG_SCANNED_MESH CONFIG_SCANNED_BUNNY
 #define CONFIG_DRAW_CONTACTS 1
+#define CONFIG_USE_RAY 1
 
 #include <vector>
 #include <math.h>
@@ -99,7 +100,7 @@ static dGeomID scanned_geom;
 
 std::list<dBody*> contact_bodies;
 
-static const real_type contact_radius = 0.01;
+static const real_type contact_radius = 0.05;
 
 static void add_contact(const real_type* pos)
 {
@@ -265,6 +266,12 @@ static void simule(void)
 
 #if CONFIG_SCANNED_MESH
 
+static void scale_mesh(real_type ratio)
+{
+  float* v = Vertices;
+  for (int count = VertexCount * 3; count; --count, ++v) *v *= ratio;
+}
+
 static void draw_mesh(dGeomID geom)
 {
   dTriIndex* Indices = (dTriIndex*)TriIndices;
@@ -342,9 +349,22 @@ static void draw_sax(void)
 static void draw_ray(void)
 {
   dsSetColor(1.0f, 0.0f, 0.0f);
+
+#if CONFIG_USE_RAY
+  dReal len;
+  dVector3 pos;
+  dVector3 dir;
+  len = dGeomRayGetLength(ray_geom->id());
+  dGeomRayGet(ray_geom->id(), pos, dir);
+  pos[0] += dir[0] * len / 2;
+  pos[1] += dir[1] * len / 2;
+  pos[2] += dir[2] * len / 2;
   dsDrawCylinder
-    (ray_body->getPosition(), ray_body->getRotation(),
-     ray_length, ray_radius);
+    (pos, ray_body->getRotation(), ray_length, ray_radius);
+#else
+  dsDrawCylinder
+    (ray_body->getPosition(), ray_body->getRotation(), ray_length, ray_radius);
+#endif
 }
 
 static void redraw(void)
@@ -489,7 +509,7 @@ static void initialize(void)
     mass.setCylinderTotal(0.000001, 3, ray_radius, ray_length);
     ray_body->setMass(mass);
 
-#if 0 // CONFIG_USE_RAY
+#if CONFIG_USE_RAY
     ray_geom = new dRay(*space, ray_length);
 #else
     ray_geom = new dCylinder(*space, ray_radius, ray_length);
@@ -498,13 +518,17 @@ static void initialize(void)
 
     dMatrix3 R;
     dRSetIdentity(R);
-    dRFromAxisAndAngle(R, 1, 0, 0, dtor(90));
+    dRFrom2Axes(R, 1, 0, 0, 0, 0, -1);
     ray_body->setRotation(R);
+#if CONFIG_USE_RAY
+    ray_body->setPosition(0, -hax_length, vax_length / 2);
+#else
     ray_body->setPosition(0, -0.25, vax_length / 2);
+#endif
     ray_body->setAngularVel(0, 0, 0);
     ray_body->setLinearVel(0, 0, ray_vel);
 
-#if 0 // CONFIG_USE_RAY
+#if CONFIG_USE_RAY
     // adjust the ray
     dVector3 pos, dir;
     dGeomRayGet(*ray_geom, pos, dir);
@@ -542,6 +566,8 @@ static void initialize(void)
     scanned_body->setLinearVel(0, 0, 0);
 
 #elif CONFIG_SCANNED_MESH
+    scale_mesh(0.5);
+
     bunny_data = dGeomTriMeshDataCreate();
     dGeomTriMeshDataBuildSingle
     (
@@ -557,6 +583,7 @@ static void initialize(void)
 
     dMatrix3 R;
     dRSetIdentity(R);
+    dRFromAxisAndAngle(R, 1, 0, 0, dtor(90));
     dGeomSetRotation(scanned_geom, R);
     dGeomSetPosition(scanned_geom, 0, 0, vax_length / 2);
 #endif
