@@ -1,6 +1,8 @@
 // static configuration
 #define CONFIG_SCANNED_SPHERE 0
-#define CONFIG_SCANNED_BOX 1
+#define CONFIG_SCANNED_BOX 0
+#define CONFIG_SCANNED_BUNNY 1
+#define CONFIG_SCANNED_MESH CONFIG_SCANNED_BUNNY
 #define CONFIG_DRAW_CONTACTS 1
 
 #include <vector>
@@ -9,10 +11,15 @@
 #include <ode/ode.h>
 #include <drawstuff/drawstuff.h>
 
+#if CONFIG_SCANNED_BUNNY
+# include "bunny_geom.h"
+#endif
+
 
 #ifdef dDOUBLE
 # define dsDrawCylinder dsDrawCylinderD
 # define dsDrawSphere dsDrawSphereD
+# define dsDrawTriangle dsDrawTriangleD
 #endif
 
 
@@ -21,6 +28,8 @@ typedef dReal real_type;
 
 // sharp ir sensor
 
+// device model
+// sampling latency (real_type usecs)
 __attribute__((unused))
 static real_type sharpir_dtov(real_type d)
 {
@@ -74,9 +83,14 @@ static const dReal ray_vel = 0.3;
 static dBody* ray_body;
 static dGeom* ray_geom;
 
+#if (CONFIG_SCANNED_SPHERE || CONFIG_SCANNED_BOX)
 static const dReal scanned_radius = 0.2;
 static dBody* scanned_body;
 static dGeom* scanned_geom;
+#else
+static dTriMeshDataID bunny_data;
+static dGeomID scanned_geom;
+#endif
 
 
 #if CONFIG_DRAW_CONTACTS
@@ -176,7 +190,11 @@ static void simule_sampling(void)
   dContactGeom contacts[contact_size];
   
   const int contact_count = dCollide
+#if (CONFIG_SCANNED_BOX || CONFIG_SCANNED_SPHERE)
     (*ray_geom, *scanned_geom, contact_size, contacts, sizeof(dContactGeom));
+#elif CONFIG_SCANNED_MESH
+    (*ray_geom, scanned_geom, contact_size, contacts, sizeof(dContactGeom));
+#endif
 
   if (contact_count == 0) return ;
 
@@ -245,6 +263,38 @@ static void simule(void)
 
 // drawing
 
+#if CONFIG_SCANNED_MESH
+
+static void draw_mesh(dGeomID geom)
+{
+  dTriIndex* Indices = (dTriIndex*)TriIndices;
+
+  // assume all trimeshes are drawn as bunnies
+  const dReal* const Pos = dGeomGetPosition(geom);
+  const dReal* const Rot = dGeomGetRotation(geom);
+
+  for (int ii = 0; ii < IndexCount / 3; ii++)
+  {
+    const dReal v[9] =
+    {
+      // explicit conversion from float to dReal
+      Vertices[Indices[ii * 3 + 0] * 3 + 0],
+      Vertices[Indices[ii * 3 + 0] * 3 + 1],
+      Vertices[Indices[ii * 3 + 0] * 3 + 2],
+      Vertices[Indices[ii * 3 + 1] * 3 + 0],
+      Vertices[Indices[ii * 3 + 1] * 3 + 1],
+      Vertices[Indices[ii * 3 + 1] * 3 + 2],
+      Vertices[Indices[ii * 3 + 2] * 3 + 0],
+      Vertices[Indices[ii * 3 + 2] * 3 + 1],
+      Vertices[Indices[ii * 3 + 2] * 3 + 2]
+    };
+
+    dsDrawTriangle(Pos, Rot, &v[0], &v[3], &v[6], 1);
+  }
+}
+
+#endif // CONFIG_SCANNED_MESH
+
 static void draw_scanned(void)
 {
   dsSetColor(0.9, 0.9, 0.9);
@@ -256,6 +306,8 @@ static void draw_scanned(void)
   dGeomBoxGetLengths(*scanned_geom, sides);
   dsDrawBox  
     (scanned_body->getPosition(), scanned_body->getRotation(), sides);
+#elif CONFIG_SCANNED_MESH
+  draw_mesh(scanned_geom);
 #endif
 }
 
@@ -465,30 +517,50 @@ static void initialize(void)
 
   // create the scanned object
   {
+#if (CONFIG_SCANNED_SPHERE || CONFIG_SCANNED_BOX)
     scanned_body = new dBody(*world);
     dMass mass;
-#if CONFIG_SCANNED_SPHERE
+
+# if CONFIG_SCANNED_SPHERE
     mass.setSphereTotal(0.00001, scanned_radius);
-#elif CONFIG_SCANNED_BOX
+    scanned_body->setMass(mass);
+    scanned_geom = new dSphere(*space, scanned_radius);
+# elif CONFIG_SCANNED_BOX
     mass.setBoxTotal
       (0.00001, scanned_radius, scanned_radius, scanned_radius);
-#endif
     scanned_body->setMass(mass);
-
-#if CONFIG_SCANNED_SPHERE
-    scanned_geom = new dSphere(*space, scanned_radius);
-#elif CONFIG_SCANNED_BOX
     scanned_geom = new dBox
       (*space, scanned_radius, scanned_radius, scanned_radius);
-#endif
-    scanned_geom->setBody(*scanned_body);
+#endif // CONFIG_SCANNED_BOX
 
+    scanned_geom->setBody(*scanned_body);
     dMatrix3 R;
     dRSetIdentity(R);
     scanned_body->setRotation(R);
     scanned_body->setPosition(0, 0, vax_length / 2);
     scanned_body->setAngularVel(0, 0, 0);
     scanned_body->setLinearVel(0, 0, 0);
+
+#elif CONFIG_SCANNED_MESH
+    bunny_data = dGeomTriMeshDataCreate();
+    dGeomTriMeshDataBuildSingle
+    (
+     bunny_data,
+     &Vertices[0],
+     3 * sizeof(float),
+     VertexCount,
+     (dTriIndex*)TriIndices,
+     IndexCount, 3 * sizeof(dTriIndex)
+    );
+    scanned_geom = dCreateTriMesh(*space, bunny_data, 0, 0, 0);
+    dGeomSetData(scanned_geom, bunny_data);
+
+    dMatrix3 R;
+    dRSetIdentity(R);
+    dGeomSetRotation(scanned_geom, R);
+    dGeomSetPosition(scanned_geom, 0, 0, vax_length / 2);
+#endif
+
   }
 
 #if 0  // create sax, env fixed joint
