@@ -71,8 +71,11 @@ static void allegro_step(void)
 
 #define CONFIG_PL_SW0_TRIS TRISBbits.TRISB2
 #define CONFIG_PL_SW0_PORT PORTBbits.RB2
+
+#if 0 /* not implemented */
 #define CONFIG_PL_SW1_TRIS TRISBbits.TRISB3
 #define CONFIG_PL_SW1_PORT PORTBbits.RB3
+#endif /* not implemented */
 
 /* moving direction (clockwise, counter cw) */
 #define PL_DIR_CW 0
@@ -96,8 +99,13 @@ static void pl_setup(void)
   allegro_setup();
 
   CONFIG_PL_SW0_TRIS = 1;
+
+#if 0 /* not implemented */
   CONFIG_PL_SW1_TRIS = 1;
+#endif /* not implemented */
 }
+
+#define pl_is_sw0_pushed() (CONFIG_PL_SW0_PORT == 1)
 
 static unsigned int pl_move_until
 (unsigned int dir, unsigned int mm, unsigned int bits)
@@ -124,7 +132,7 @@ static unsigned int pl_move_until
 
     if (bits & PL_MOVE_SW0)
     {
-      if (CONFIG_PL_SW0_PORT == 1)
+      if (pl_is_sw0_pushed())
 	return PL_MOVE_SW0;
     }
   }
@@ -164,8 +172,8 @@ static int pl_move_initial(void)
 
 static void led_setup(void)
 {
-#define CONFIG_LED_TRIS TRISBbits.TRISB4
-#define CONFIG_LED_PORT LATBbits.LATB4
+#define CONFIG_LED_TRIS TRISBbits.TRISB3
+#define CONFIG_LED_PORT LATBbits.LATB3
   CONFIG_LED_TRIS = 0;
 }
 
@@ -195,6 +203,14 @@ int main(void)
 
   pl_setup();
   pl_move_initial();
+
+  while (is_done == 0)
+  {
+    if (pl_is_sw0_pushed())
+      CONFIG_LED_PORT = 1;
+    else
+      CONFIG_LED_PORT = 0;
+  }
 
   /* todo: check move_initial status */
 
