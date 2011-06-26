@@ -16,10 +16,10 @@
 
 /* ellegro stepper driver */
 
-#define CONFIG_ALLEGRO_STEP_TRIS TRISBbits.TRISB0
-#define CONFIG_ALLEGRO_STEP_PORT LATBbits.LATB0
-#define CONFIG_ALLEGRO_DIR_TRIS TRISBbits.TRISB1
-#define CONFIG_ALLEGRO_DIR_PORT LATBbits.LATB1
+#define CONFIG_ALLEGRO_STEP_TRIS TRISCbits.TRISC0
+#define CONFIG_ALLEGRO_STEP_PORT LATCbits.LATC0
+#define CONFIG_ALLEGRO_DIR_TRIS TRISCbits.TRISC1
+#define CONFIG_ALLEGRO_DIR_PORT LATCbits.LATC1
 
 static void allegro_setup(void)
 {
@@ -69,13 +69,12 @@ static void allegro_step(void)
 #define CONFIG_PL_SCREW_UM 5500 /* screw length, in micrometer */
 #define CONFIG_PL_STEP_UM 115 /* step length, in micrometer */
 
-#define CONFIG_PL_SW0_TRIS TRISBbits.TRISB2
-#define CONFIG_PL_SW0_PORT PORTBbits.RB2
-
-#if 0 /* not implemented */
-#define CONFIG_PL_SW1_TRIS TRISBbits.TRISB3
-#define CONFIG_PL_SW1_PORT PORTBbits.RB3
-#endif /* not implemented */
+/* WARNING: any change on INPUT pin in RB[4 - 7] will cause RBIF
+   to be set, which may be considered as a false switch pushed
+   if not used carefully.
+*/
+#define CONFIG_PL_SW0_TRIS TRISBbits.TRISB4
+#define CONFIG_PL_SW0_PORT PORTBbits.RB4
 
 /* moving direction (clockwise, counter cw) */
 #define PL_DIR_CW 0
@@ -94,18 +93,34 @@ int main(int ac, char** av)
 
 #endif /* perstep length computation */
 
+/* use PORTB interrupt on change feature to track sw0 changes */
+
+static int enable_rbif(void)
+{
+  /* setup ccp module so that an interrupt is generated on change */
+  INTCONbits.RBIF = 0;
+  if (CONFIG_PL_SW0_PORT == 1) return -1;
+  return 0;
+}
+
+#define read_rbif() (INTCONbits.RBIF)
+#define reset_rbif() do { INTCONbits.RBIF = 0; } while (0)
+
+
 static void pl_setup(void)
 {
   allegro_setup();
 
   CONFIG_PL_SW0_TRIS = 1;
 
-#if 0 /* not implemented */
-  CONFIG_PL_SW1_TRIS = 1;
-#endif /* not implemented */
-}
+  /* exclude from RBIF set */
+  TRISBbits.TRISB5 = 0;
+  TRISBbits.TRISB6 = 0;
+  TRISBbits.TRISB7 = 0;
 
-#define pl_is_sw0_pushed() (CONFIG_PL_SW0_PORT == 1)
+  INTCONbits.RBIF = 0;
+  INTCONbits.RBIE = 0;
+}
 
 static unsigned int pl_move_until
 (unsigned int dir, unsigned int mm, unsigned int bits)
@@ -118,22 +133,29 @@ static unsigned int pl_move_until
 #define PL_MOVE_SW0 (1 << 0)
 #define PL_MOVE_FAILURE ((unsigned int)-1)
 
-  unsigned int step_count = 50;
+  unsigned int step_count = mm;
 
-  mm = mm;
+  if (bits & PL_MOVE_SW0)
+  {
+    if (enable_rbif() == -1)
+      return PL_MOVE_SW0;
+  }
 
   allegro_set_dir(dir);
 
   for (; step_count; --step_count)
   {
     volatile unsigned int delay = 0;
-    for (delay = 0; delay < 1000; ++delay) ;
+    for (delay = 0; delay < 500; ++delay) ;
     allegro_step();
 
     if (bits & PL_MOVE_SW0)
     {
-      if (pl_is_sw0_pushed())
+      if (read_rbif())
+      {
+	reset_rbif();
 	return PL_MOVE_SW0;
+      }
     }
   }
 
@@ -150,15 +172,20 @@ static int pl_move_initial(void)
 {
   /* move to initial position (ie. until switch) */
 
-  unsigned int pass = 0;
+  unsigned int pass;
   unsigned int status;
 
-#define CONFIG_PL_SW0_DIR PL_DIR_CW
+#define CONFIG_PL_SW0_DIR PL_DIR_CCW
 
-  for (; pass < 50; ++pass)
+  for (pass = 0; pass < 50; ++pass)
   {
-    status = pl_move_until(CONFIG_PL_SW0_DIR, 1, PL_MOVE_SW0);
-    if (status == PL_MOVE_SW0) return 0;
+    status = pl_move_until(CONFIG_PL_SW0_DIR, 10, PL_MOVE_SW0);
+    if (status == PL_MOVE_SW0)
+    {
+      /* move some steps reverse */
+      pl_move_until(PL_DIR_CW, 5, 0);
+      return 0;
+    }
   }
 
   /* failure */
@@ -172,9 +199,10 @@ static int pl_move_initial(void)
 
 static void led_setup(void)
 {
-#define CONFIG_LED_TRIS TRISBbits.TRISB3
-#define CONFIG_LED_PORT LATBbits.LATB3
+#define CONFIG_LED_TRIS TRISBbits.TRISB2
+#define CONFIG_LED_PORT LATBbits.LATB2
   CONFIG_LED_TRIS = 0;
+  CONFIG_LED_PORT = 0;
 }
 
 static void led_toggle(void)
@@ -202,15 +230,22 @@ int main(void)
   led_setup();
 
   pl_setup();
-  pl_move_initial();
 
-  while (is_done == 0)
+#if 0 /* unused */
+  enable_rbif();
+  while (1)
   {
-    if (pl_is_sw0_pushed())
+    if (read_rbif())
+    {
       CONFIG_LED_PORT = 1;
+      reset_rbif();
+    }
     else
       CONFIG_LED_PORT = 0;
   }
+#endif /* unused */
+
+  pl_move_initial();
 
   /* todo: check move_initial status */
 
@@ -223,7 +258,7 @@ int main(void)
     if (++pass == 3000)
     {
       bits = (dir == CONFIG_PL_SW0_DIR) ? PL_MOVE_SW0 : 0;
-      status = pl_move_until(dir, 42, bits);
+      status = pl_move_until(dir, 200, bits);
 
       if (bits && (status == PL_MOVE_SW0))
       {
