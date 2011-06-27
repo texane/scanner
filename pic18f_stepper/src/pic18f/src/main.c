@@ -106,6 +106,7 @@ static int enable_rbif(void)
 #define read_rbif() (INTCONbits.RBIF)
 #define reset_rbif() do { INTCONbits.RBIF = 0; } while (0)
 
+#define pl_reverse_dir(__d) ((__d) ^ 1)
 
 static void pl_setup(void)
 {
@@ -174,16 +175,22 @@ static int pl_move_initial(void)
 
   unsigned int pass;
   unsigned int status;
+  unsigned int retries = 0;
 
 #define CONFIG_PL_SW0_DIR PL_DIR_CCW
 
-  for (pass = 0; pass < 50; ++pass)
+  for (pass = 0; pass < 40; ++pass)
   {
+    retries = 0;
+
+  retry_move:
     status = pl_move_until(CONFIG_PL_SW0_DIR, 10, PL_MOVE_SW0);
     if (status == PL_MOVE_SW0)
     {
+      if ((++retries) < 5) goto retry_move;
+
       /* move some steps reverse */
-      pl_move_until(PL_DIR_CW, 5, 0);
+      pl_move_until(pl_reverse_dir(CONFIG_PL_SW0_DIR), 5, 0);
       return 0;
     }
   }
@@ -191,8 +198,6 @@ static int pl_move_initial(void)
   /* failure */
   return -1;
 }
-
-#define pl_reverse_dir(__d) ((__d) ^ 1)
 
 
 /* debugging led */
@@ -219,58 +224,78 @@ int main(void)
 {
   volatile int is_done = 0;
   unsigned int pass = 0;
-  unsigned int dir = CONFIG_PL_SW0_DIR;
+  unsigned int dir;
   unsigned int status;
   unsigned int bits = 0;
+  unsigned int adc_value;
+  unsigned int step_pos;
 
   osc_setup();
   int_setup();
+
   serial_setup();
 
-  led_setup();
-
-  pl_setup();
-
 #if 0 /* unused */
-  enable_rbif();
   while (1)
   {
-    if (read_rbif())
-    {
-      CONFIG_LED_PORT = 1;
-      reset_rbif();
-    }
-    else
-      CONFIG_LED_PORT = 0;
+    volatile unsigned int i;
+    for (i = 0; i < 10000; ++i) ;
+    serial_writei(adc_read(CONFIG_ADC_CHANNEL));
   }
 #endif /* unused */
+
+  led_setup();
+  pl_setup();
 
   pl_move_initial();
 
   /* todo: check move_initial status */
 
   /* reverse direction */
-  dir = pl_reverse_dir(dir);
+  dir = pl_reverse_dir(CONFIG_PL_SW0_DIR);
+
+  /* scan */
+  step_pos = 0;
 
   while (is_done == 0)
   {
     /* wait before next move */
-    if (++pass == 3000)
+    if (++pass == 1000)
     {
-      bits = (dir == CONFIG_PL_SW0_DIR) ? PL_MOVE_SW0 : 0;
-      status = pl_move_until(dir, 200, bits);
+      pass = 0;
 
-      if (bits && (status == PL_MOVE_SW0))
+      bits = (dir == CONFIG_PL_SW0_DIR) ? PL_MOVE_SW0 : 0;
+      status = pl_move_until(dir, 1, bits);
+
+      if (status == PL_MOVE_SUCCESS)
+      {
+	/* update step count or reverse dir */
+	if (dir == CONFIG_PL_SW0_DIR)
+	{
+	  if ((--step_pos) == 0)
+	    dir = pl_reverse_dir(dir);
+	}
+	else
+	{
+	  /* assume 190 steps per run */
+	  if ((++step_pos) == 190)
+	    dir = pl_reverse_dir(dir);
+	}
+
+	/* read adc and send pair */
+#define CONFIG_ADC_CHANNEL 1
+	adc_value = adc_read(CONFIG_ADC_CHANNEL);
+	serial_writei(step_pos);
+	serial_writei(adc_value);
+      }
+      else if (bits && (status == PL_MOVE_SW0))
       {
 	/* reverse direction */
 	led_toggle();
+	step_pos = 0;
+	dir = pl_reverse_dir(dir);
       }
-
-      dir = pl_reverse_dir(dir);
-      pass = 0;
     }
-
-    /* adc_read(); */
   }
 
   return 0;

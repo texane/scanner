@@ -32,14 +32,13 @@ unsigned short adc_read(unsigned char chan)
   ADCON1bits.PCFG2 = 1;
   ADCON1bits.PCFG3 = 0;
 
-  /* vref-: vss, vref+: vdd */
-
+  /* vref-: vss, vref+: an3 */
   ADCON1bits.VCFG0 = 0;
-  ADCON1bits.VCFG1 = 0;
+  ADCON1bits.VCFG1 = 1;
 
 #else
 
-  ADCON1 = 0xf - (chan + 1);
+  ADCON1 = (1 << 4) | (0xf - (chan + 1));
 
 #endif
   
