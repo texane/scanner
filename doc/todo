@@ -1,0 +1,8 @@
+. device
+ . scan multiple time per step instead of doing multiple pass
+ . receive commands from host
+
+. host
+ . commands sending (sync, scanning range, calibration...)
+
+. process_dat
