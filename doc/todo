@@ -6,9 +6,13 @@
  . commands sending (sync, scanning range, calibration...)
 
 . process_dat
+ . calibration, measurement
+  . how long one step
+  . how long is 1mv
+   -> plot in a true unit system
  . averaging
   -> dont use arithmetic mean, variance, stddev
  . median filtering
   -> given kernel size
-  -> 
- . lissage des pics
+   -> approx 4 or 5 steps
+  -> smooth he peaks ... (median filtering should do)

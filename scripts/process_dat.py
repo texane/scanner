@@ -4,13 +4,26 @@ import sys
 import string
 import os
 
+def step_to_mm(step):
+    return step
+
+def adc10_to_mm(adc):
+    # convert adc to millivolts
+    # vref is set to 3.5v == 3500mv
+    # adc is 10 bits (1024)
+    # sharp model is gp2y0a41sk0f
+    # assume that distance is >= 30mm (see sharp datasheet)
+    mv = (3500 / 1024) * adc
+    return (10000 / mv) - 4.2
+
 def read_pairs(filename):
     pairs = []
     fd = open(filename, 'r')
     for line in fd: 
         pair = line.strip().split()
-        pair[0] = string.atol(pair[0], 16)
-        pair[1] = string.atol(pair[1], 16)
+        if len(pair) != 2: continue
+        pair[0] = step_to_mm(string.atol(pair[0], 16))
+        pair[1] = adc10_to_mm(string.atol(pair[1], 16))
         pairs.append(pair)
     fd.close();
     return pairs
@@ -65,7 +78,13 @@ def split_passes(pairs):
 
 def quantize_pairs(pairs):
     # todo
-    return
+    return pairs
+    qpairs = []
+    for p in pairs:
+        d = p[1]
+        if d & 1: d -= 1
+        qpairs.append((p[0], d))
+    return qpairs
 
 def print_pairs(pairs):
     for pair in pairs:
@@ -139,7 +158,7 @@ def plot_pairlist(pl):
 filename = '../host_stepper/dat/0.dat'
 if len(sys.argv) > 1: filename = sys.argv[1]
 
-do_passes = 1
+do_passes = 0
 
 pairs = read_pairs(filename)
 
@@ -149,5 +168,6 @@ if do_passes:
     plot_pairlist(pairlist)
 else:
     apairs = average_pairs(pairs)
+    qpairs = quantize_pairs(apairs)
     # print_pairs(apairs)
-    plot_pairs(apairs)
+    plot_pairs(qpairs)
