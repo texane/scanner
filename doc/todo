@@ -6,3 +6,9 @@
  . commands sending (sync, scanning range, calibration...)
 
 . process_dat
+ . averaging
+  -> dont use arithmetic mean, variance, stddev
+ . median filtering
+  -> given kernel size
+  -> 
+ . lissage des pics

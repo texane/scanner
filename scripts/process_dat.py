@@ -138,11 +138,16 @@ def plot_pairlist(pl):
 # main
 filename = '../host_stepper/dat/0.dat'
 if len(sys.argv) > 1: filename = sys.argv[1]
-pairs = read_pairs(filename)
-#apairs = average_pairs(pairs)
-#print_pairs(apairs)
-#plot_pairs(apairs)
 
-pairlist = split_passes(pairs)
-#print_pairlist(pairlist)
-plot_pairlist(pairlist)
+do_passes = 1
+
+pairs = read_pairs(filename)
+
+if do_passes:
+    pairlist = split_passes(pairs)
+    # print_pairlist(pairlist)
+    plot_pairlist(pairlist)
+else:
+    apairs = average_pairs(pairs)
+    # print_pairs(apairs)
+    plot_pairs(apairs)

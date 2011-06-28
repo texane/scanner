@@ -229,6 +229,7 @@ int main(void)
   unsigned int bits = 0;
   unsigned int adc_value;
   unsigned int step_pos;
+  unsigned int i;
 
   osc_setup();
   int_setup();
@@ -260,7 +261,8 @@ int main(void)
   while (is_done == 0)
   {
     /* wait before next move */
-    if (++pass == 1000)
+#define CONFIG_ADC_PER_STEP 10
+    if (++pass == (500 / CONFIG_ADC_PER_STEP))
     {
       pass = 0;
 
@@ -282,11 +284,14 @@ int main(void)
 	    dir = pl_reverse_dir(dir);
 	}
 
+	for (i = 0; i < CONFIG_ADC_PER_STEP; ++i)
+	{
 	/* read adc and send pair */
 #define CONFIG_ADC_CHANNEL 1
-	adc_value = adc_read(CONFIG_ADC_CHANNEL);
-	serial_writei(step_pos);
-	serial_writei(adc_value);
+	  adc_value = adc_read(CONFIG_ADC_CHANNEL);
+	  serial_writei(step_pos);
+	  serial_writei(adc_value);
+	}
       }
       else if (bits && (status == PL_MOVE_SW0))
       {
