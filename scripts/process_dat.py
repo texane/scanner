@@ -5,7 +5,27 @@ import string
 import os
 
 def step_to_mm(step):
-    return step
+    return step * 57 / 200
+
+# global (voltage, distance) pairs
+sharp_pairs = [
+    ( 2860, 30 ),
+    ( 2770, 40 ),
+    ( 2340, 50 ),
+    ( 1950, 60 ),
+    ( 1680, 70 ),
+    ( 1470, 80 ),
+    ( 1320, 90 ),
+    ( 1170, 100 ),
+    ( 980, 120 ),
+    ( 810, 140 ),
+    ( 710, 160 ),
+    ( 600, 180 ),
+    ( 520, 200 ),
+    ( 460, 220 ),
+    ( 410, 250 ),
+    ( 310, 300 )
+]
 
 def adc10_to_mm(adc):
     # convert adc to millivolts
@@ -13,8 +33,16 @@ def adc10_to_mm(adc):
     # adc is 10 bits (1024)
     # sharp model is gp2y0a41sk0f
     # assume that distance is >= 30mm (see sharp datasheet)
+    # mv = (3500 / 1024) * adc
+    # return (10000 / mv) - 4.2
     mv = (3500 / 1024) * adc
-    return (10000 / mv) - 4.2
+    for pos in range(0, len(sharp_pairs)):
+        if (mv > sharp_pairs[pos][0]): break
+    if pos == 0: return 30
+    elif pos == len(sharp_pairs): return 400
+    vd = sharp_pairs[pos - 1][0] - sharp_pairs[pos][0];
+    dd = sharp_pairs[pos][1] - sharp_pairs[pos - 1][1];
+    return sharp_pairs[pos - 1][1] + ((sharp_pairs[pos - 1][0] - mv) * dd) / vd;
 
 def read_pairs(filename):
     pairs = []
@@ -114,6 +142,12 @@ def plot_pairs(pairs):
     write_pairs(pairs, '/tmp/__o')
     # make gnuplot command line and execute
     cmdline = 'gnuplot -e \"'
+    cmdline += 'set nokey; '
+    cmdline += 'set rmargin 0; '
+    cmdline += 'set lmargin 0; '
+    cmdline += 'set tmargin 0; '
+    cmdline += 'set bmargin 0; '
+    cmdline += 'set size ratio -1; ' # orthonormal
     cmdline += "plot('/tmp/__o') with lines; "
     cmdline += "replot; "
     cmdline += "pause -1; "
@@ -129,6 +163,7 @@ def plot_pairs(pairs):
 def plot_pairlist(pl):
     cmdline = 'gnuplot -e \"'
 
+    cmdline += 'set size ratio -1; ' # orthonormal
     cmdline += 'set noxtic; '
     cmdline += 'set noytic; '
     cmdline += 'set nokey; '
@@ -158,7 +193,7 @@ def plot_pairlist(pl):
 filename = '../host_stepper/dat/0.dat'
 if len(sys.argv) > 1: filename = sys.argv[1]
 
-do_passes = 0
+do_passes = 1
 
 pairs = read_pairs(filename)
 
