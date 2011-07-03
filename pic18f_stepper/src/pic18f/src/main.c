@@ -14,12 +14,81 @@
 #include "serial.h"
 
 
+
+/* servo pwm */
+
+#define CONFIG_PWM_TRIS TRISCbits.TRISC1
+#define CONFIG_PWM_PERIOD 2000
+
+static void pwm_start(unsigned int duty_usecs, unsigned int period_usecs)
+{
+#define CPU_Fosc 8000000
+#define TMR2_prescaler 16
+  unsigned int dcycle = (CPU_Fosc / 1000000) * (duty_usecs / TMR2_prescaler);
+
+  /* period register */
+  PR2 = (CPU_Fosc / 1000000) * (period_usecs / (4 * TMR2_prescaler)) - 1;
+
+  /* duty cycle msbs */
+  CCPR2L = (unsigned char)(dcycle >> 2);
+
+  /* pin selected by conf bits */
+  CONFIG_PWM_TRIS = 0;
+
+  /* enable timer2, prescaler == 16 */
+#if 0
+  {
+    T2CONbits.TMR2ON = 1;
+    T2CONbits.T2CKPS0 = 0;
+    T2CONbits.T2CKPS1 = 1;
+  }
+#else
+  {
+    T2CON = (1 << 2) | 0x2;
+  }
+#endif
+
+  /* configure control register */
+#if 0 
+  {
+    /* pwm mode */
+    CCP2CONbits.CCP2M0 = 0;
+    CCP2CONbits.CCP2M1 = 0;
+    CCP2CONbits.CCP2M2 = 1;
+    CCP2CONbits.CCP2M3 = 1;
+
+    /* duty cycle lsbs */
+    CCP2CONbits.DC2B0 = ((unsigned char)dcycle >> 0) & 1;
+    CCP2CONbits.DC2B1 = ((unsigned char)dcycle >> 1) & 1;
+  }
+#else
+  {
+    CCP2CON = (((unsigned char)(dcycle & 0x3)) << 4) | 0x0c;
+  }
+#endif
+}
+
+static void pwm_stop(void)
+{
+  CCP2CON = 0;
+}
+
+static void pwm_next(void)
+{
+#if 0
+  unsigned int i;
+  pwm_start(1200, CONFIG_PWM_PERIOD);
+  for (i = 0; i < 5000; ++i) ;
+#endif
+}
+
+
 /* ellegro stepper driver */
 
-#define CONFIG_ALLEGRO_STEP_TRIS TRISCbits.TRISC0
-#define CONFIG_ALLEGRO_STEP_PORT LATCbits.LATC0
-#define CONFIG_ALLEGRO_DIR_TRIS TRISCbits.TRISC1
-#define CONFIG_ALLEGRO_DIR_PORT LATCbits.LATC1
+#define CONFIG_ALLEGRO_STEP_TRIS TRISCbits.TRISC2
+#define CONFIG_ALLEGRO_STEP_PORT LATCbits.LATC2
+#define CONFIG_ALLEGRO_DIR_TRIS TRISCbits.TRISC3
+#define CONFIG_ALLEGRO_DIR_PORT LATCbits.LATC3
 
 static void allegro_setup(void)
 {
@@ -229,21 +298,35 @@ int main(void)
   unsigned int bits = 0;
   unsigned int adc_value;
   unsigned int step_pos;
+  unsigned int step_pwm;
   unsigned int i;
 
   osc_setup();
   int_setup();
 
+#if 0 /* servo unit */
+  bits = 1;
+ redo_pwm:
+  if (bits) pwm_start(1200, CONFIG_PWM_PERIOD);
+  for (is_done = 0; is_done < 5000; ++is_done) ;
+  if (bits) pwm_stop();
+  for (i = 0; i < 10; ++i)
+    for (is_done = 0; is_done < 10000; ++is_done) ;
+  bits ^= 1;
+  goto redo_pwm;
+  while (1) ;
+#endif /* servo unit */
+
   serial_setup();
 
-#if 0 /* unused */
+#if 0 /* serial unit */
   while (1)
   {
     volatile unsigned int i;
     for (i = 0; i < 10000; ++i) ;
     serial_writei(adc_read(CONFIG_ADC_CHANNEL));
   }
-#endif /* unused */
+#endif /* serial unit */
 
   led_setup();
   pl_setup();
@@ -257,6 +340,7 @@ int main(void)
 
   /* scan */
   step_pos = 0;
+  step_pwm = 0;
 
   while (is_done == 0)
   {
@@ -275,13 +359,25 @@ int main(void)
 	if (dir == CONFIG_PL_SW0_DIR)
 	{
 	  if ((--step_pos) == 0)
+	  {
+	    /* next angle */
+	    ++step_pwm;
+	    pwm_next();
+
 	    dir = pl_reverse_dir(dir);
+	  }
 	}
 	else
 	{
 	  /* assume 190 steps per run */
 	  if ((++step_pos) == 190)
+	  {
+	    /* next angle */
+	    ++step_pwm;
+	    pwm_next();
+
 	    dir = pl_reverse_dir(dir);
+	  }
 	}
 
 	for (i = 0; i < CONFIG_ADC_PER_STEP; ++i)
@@ -291,6 +387,7 @@ int main(void)
 	  adc_value = adc_read(CONFIG_ADC_CHANNEL);
 	  serial_writei(step_pos);
 	  serial_writei(adc_value);
+	  serial_writei(step_pwm);
 	}
       }
       else if (bits && (status == PL_MOVE_SW0))
@@ -299,6 +396,10 @@ int main(void)
 	led_toggle();
 	step_pos = 0;
 	dir = pl_reverse_dir(dir);
+
+	/* next angle */
+	++step_pwm;
+	pwm_next();
       }
     }
   }

@@ -107,16 +107,19 @@ int main(int ac, char** av)
     process_pair((uint16_t));
   }
 #else
-  uint16_t val, pos;
+  uint16_t h, d, a;
   while (1)
   {
     if (wait_for_read() == -1) break ;
-    if (serial_readn(&handle, (void*)&pos, sizeof(pos))) break ;
+    if (serial_readn(&handle, (void*)&h, sizeof(h))) break ;
 
     if (wait_for_read() == -1) break ;
-    if (serial_readn(&handle, (void*)&val, sizeof(val))) break ;
+    if (serial_readn(&handle, (void*)&d, sizeof(d))) break ;
 
-    printf("%04x %04x\n", pos, val);
+    if (wait_for_read() == -1) break ;
+    if (serial_readn(&handle, (void*)&a, sizeof(a))) break ;
+
+    printf("%04x %04x %04x\n", h, d, a);
   }
 #endif
 
