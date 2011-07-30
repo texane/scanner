@@ -69,7 +69,9 @@ static void pwm_next(void)
 {
   volatile unsigned int i;
   pwm_start(1200, CONFIG_PWM_PERIOD);
-  for (i = 0; i < 5000; ++i) ;
+#define CONFIG_PWM_ITER_04_675 2500
+#define CONFIG_PWM_ITER_15_000 5000
+  for (i = 0; i < CONFIG_PWM_ITER_15_000; ++i) ;
   pwm_stop();
 }
 
@@ -339,7 +341,7 @@ int main(void)
   bits = 1;
  redo_pwm:
   if (bits) pwm_start(1200, CONFIG_PWM_PERIOD);
-  for (is_done = 0; is_done < 5000; ++is_done) ;
+  for (is_done = 0; is_done < CONFIG_PWM_ITER_15_000; ++is_done) ;
   if (bits) pwm_stop();
   for (i = 0; i < 10; ++i)
     for (is_done = 0; is_done < 10000; ++is_done) ;
