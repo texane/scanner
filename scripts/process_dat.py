@@ -190,10 +190,10 @@ def plot_pairlist(pl):
     return
 
 # main
-filename = '../host_stepper/dat/0.dat'
+filename = '../dat/0.dat'
 if len(sys.argv) > 1: filename = sys.argv[1]
 
-do_passes = 1
+do_passes = 0
 
 pairs = read_pairs(filename)
 

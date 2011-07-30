@@ -280,7 +280,7 @@ static void led_toggle(void)
   n ^= 1;
 }
 
-#define led_set(__n) do { CONFIG_LED_PORT = __n; } while (0)
+#define led_set(__n) do { CONFIG_LED_PORT = (__n); } while (0)
 
 /* main */
 
@@ -350,7 +350,7 @@ int main(void)
 
 #if 0 /* pl unit */
   {
-    static unsigned int dir = CONFIG_PL_SW0_DIR;
+    dir = CONFIG_PL_SW0_DIR;
     while (1)
     {
       led_set(dir);
@@ -376,12 +376,15 @@ int main(void)
   {
     /* wait before next move */
     ++pass;
-#define CONFIG_ADC_PER_STEP 10
-    if (pass == (500 / CONFIG_ADC_PER_STEP))
+#define CONFIG_ADC_PER_STEP 4
+    if (pass == (400 / CONFIG_ADC_PER_STEP))
     {
       pass = 0;
 
-      bits = (dir == CONFIG_PL_SW0_DIR) ? PL_MOVE_SW0 : 0;
+      bits = 0;
+      /* fixme */
+      /* if (dir == CONFIG_PL_SW0_DIR) bits |= PL_MOVE_SW0; */
+      /* fixme */
       status = pl_move_until(dir, 1, bits);
 
       if (status == PL_MOVE_SUCCESS)
