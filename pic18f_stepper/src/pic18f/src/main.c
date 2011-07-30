@@ -20,6 +20,12 @@
 #define CONFIG_PWM_TRIS TRISCbits.TRISC1
 #define CONFIG_PWM_PERIOD 2000
 
+static void pwm_setup(void)
+{
+  /* necessary to avoid pin early undefined state */
+  CONFIG_PWM_TRIS = 0;
+}
+
 static void pwm_start(unsigned int duty_usecs, unsigned int period_usecs)
 {
 #define CPU_Fosc 8000000
@@ -309,6 +315,7 @@ int main(void)
   int_setup();
   serial_setup();
   led_setup();
+  pwm_setup();
   pl_setup();
 
 
