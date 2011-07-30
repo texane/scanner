@@ -36,17 +36,9 @@ static void pwm_start(unsigned int duty_usecs, unsigned int period_usecs)
   CONFIG_PWM_TRIS = 0;
 
   /* enable timer2, prescaler == 16 */
-#if 0
-  {
-    T2CONbits.TMR2ON = 1;
-    T2CONbits.T2CKPS0 = 0;
-    T2CONbits.T2CKPS1 = 1;
-  }
-#else
-  {
-    T2CON = (1 << 2) | 0x2;
-  }
-#endif
+  T2CONbits.TMR2ON = 1;
+  T2CONbits.T2CKPS0 = 0;
+  T2CONbits.T2CKPS1 = 1;
 
   /* configure control register */
 #if 0 
@@ -75,11 +67,10 @@ static void pwm_stop(void)
 
 static void pwm_next(void)
 {
-#if 0
-  unsigned int i;
+  volatile unsigned int i;
   pwm_start(1200, CONFIG_PWM_PERIOD);
   for (i = 0; i < 5000; ++i) ;
-#endif
+  pwm_stop();
 }
 
 
@@ -314,6 +305,10 @@ int main(void)
 
   osc_setup();
   int_setup();
+  serial_setup();
+  led_setup();
+  pl_setup();
+
 
 #if 0 /* switch unit */
   led_setup();
@@ -331,6 +326,15 @@ int main(void)
   while (1) ;
 #endif /* switch unit */
 
+#if 0 /* serial unit */
+  while (1)
+  {
+    volatile unsigned int i;
+    for (i = 0; i < 10000; ++i) ;
+    serial_writei(adc_read(CONFIG_ADC_CHANNEL));
+  }
+#endif /* serial unit */
+
 #if 0 /* servo unit */
   bits = 1;
  redo_pwm:
@@ -344,28 +348,14 @@ int main(void)
   while (1) ;
 #endif /* servo unit */
 
-  serial_setup();
-
-#if 0 /* serial unit */
-  while (1)
-  {
-    volatile unsigned int i;
-    for (i = 0; i < 10000; ++i) ;
-    serial_writei(adc_read(CONFIG_ADC_CHANNEL));
-  }
-#endif /* serial unit */
-
-  led_setup();
-  pl_setup();
-
-#if 1 /* pl unit */
+#if 0 /* pl unit */
   {
     static unsigned int dir = CONFIG_PL_SW0_DIR;
     while (1)
     {
       led_set(dir);
       pl_move(dir, 100);
-/*       dir = pl_reverse_dir(dir); */
+      dir = pl_reverse_dir(dir);
     }
   }
   while (1) ;
@@ -385,8 +375,9 @@ int main(void)
   while (is_done == 0)
   {
     /* wait before next move */
+    ++pass;
 #define CONFIG_ADC_PER_STEP 10
-    if (++pass == (500 / CONFIG_ADC_PER_STEP))
+    if (pass == (500 / CONFIG_ADC_PER_STEP))
     {
       pass = 0;
 
