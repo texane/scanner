@@ -83,12 +83,15 @@ static void pwm_next(void)
 }
 
 
-/* ellegro stepper driver */
+/* allegro stepper driver
+   warning: rc3 pin not implemented
+   warning: rc4, rc5 have no digital output capabilities
+ */
 
 #define CONFIG_ALLEGRO_STEP_TRIS TRISCbits.TRISC2
 #define CONFIG_ALLEGRO_STEP_PORT LATCbits.LATC2
-#define CONFIG_ALLEGRO_DIR_TRIS TRISCbits.TRISC3
-#define CONFIG_ALLEGRO_DIR_PORT LATCbits.LATC3
+#define CONFIG_ALLEGRO_DIR_TRIS TRISCbits.TRISC0
+#define CONFIG_ALLEGRO_DIR_PORT LATCbits.LATC0
 
 static void allegro_setup(void)
 {
@@ -168,14 +171,14 @@ static int enable_rbif(void)
 {
   /* setup ccp module so that an interrupt is generated on change */
   INTCONbits.RBIF = 0;
-  if (CONFIG_PL_SW0_PORT == 1) return -1;
+  if (CONFIG_PL_SW0_PORT == 0) return -1;
   return 0;
 }
 
 #define read_rbif() (INTCONbits.RBIF)
 #define reset_rbif() do { INTCONbits.RBIF = 0; } while (0)
 
-#define pl_reverse_dir(__d) ((__d) ^ 1)
+#define pl_reverse_dir(__d) (((__d) ^ 1) & 1)
 
 static void pl_setup(void)
 {
@@ -286,6 +289,7 @@ static void led_toggle(void)
   n ^= 1;
 }
 
+#define led_set(__n) do { CONFIG_LED_PORT = __n; } while (0)
 
 /* main */
 
@@ -301,8 +305,31 @@ int main(void)
   unsigned int step_pwm;
   unsigned int i;
 
+  /* early init */
+  ADCON1 = 0x0F;
+  CMCON = 0x07;
+
+  /* disable portb pullups */
+  INTCON2bits.RBPU = 1;
+
   osc_setup();
   int_setup();
+
+#if 0 /* switch unit */
+  led_setup();
+
+  enable_rbif();
+  while (1)
+  {
+    if (read_rbif())
+    {
+      reset_rbif();
+      led_toggle();
+    }
+  }
+  
+  while (1) ;
+#endif /* switch unit */
 
 #if 0 /* servo unit */
   bits = 1;
@@ -330,6 +357,19 @@ int main(void)
 
   led_setup();
   pl_setup();
+
+#if 1 /* pl unit */
+  {
+    static unsigned int dir = CONFIG_PL_SW0_DIR;
+    while (1)
+    {
+      led_set(dir);
+      pl_move(dir, 100);
+/*       dir = pl_reverse_dir(dir); */
+    }
+  }
+  while (1) ;
+#endif /* pl unit */
 
   pl_move_initial();
 
