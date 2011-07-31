@@ -1,0 +1,19 @@
+. sharp linearization
+ . http://www.acroname.com/robotics/info/articles/irlinear/irlinear.html
+ . model is V = 1 / (D + K)
+  . in the spec, K = 0.42 but it depends on the sharp model + calibration data
+
+. meshing
+ . http://pille.iwr.uni-heidelberg.de/~laserscan01/textbody.html
+
+. scanner links
+ . http://www.david-laserscanner.com/wiki/the_open_hardware_project
+ . http://www.simple3d.com/
+ . http://www.muellerr.ch/engineering/overview.html
+ . http://thaumaturgy.net/~etgold/scanner/
+ . http://www.multires.caltech.edu/teaching/courses/3DP/presentations/Kubicky/ee148.htm
+ . http://www.engr.uky.edu/~lgh/soft/softscannerdesigns.htm
+ . http://mesh.brown.edu/byo3d/links.html
+
+. software
+ . http://www.ros.org/wiki/laser_pipeline
