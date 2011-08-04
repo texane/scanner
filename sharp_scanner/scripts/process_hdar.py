@@ -22,7 +22,7 @@ import math
 
 
 # fixed radius, if missing
-CONFIG_FIXED_RADIUS = '%x'%125
+CONFIG_FIXED_RADIUS = '%x'%100
 
 # fixed per step values
 def to_radians(d): return (2.0 * math.pi / 360.0) * d
@@ -88,11 +88,14 @@ def read_hdar_tuples(filename):
     fd = open(filename, 'r')
     for line in fd: 
         toks = line.strip().split()
-        tuple = [ 0, 0, 0, 0 ]
+        tuple = [ 0, 0, 0, 0, 0, 0, 0 ]
+        tuple[4] = string.atol(toks[0], 16)
+        tuple[5] = string.atol(toks[1], 16)
+        tuple[6] = string.atol(toks[2], 16)
         tuple[0] = step_to_height(string.atol(toks[0], 16))
         tuple[1] = adc10_to_mm(string.atol(toks[1], 16))
         # skip, assume no contact point
-        # if tuple[1] >= 300: continue
+        if tuple[1] >= 400: continue
         tuple[2] = step_to_radius(string.atol(toks[2], 16))
         r = CONFIG_FIXED_RADIUS
         if len(toks) == 4: r = toks[3]
@@ -105,6 +108,8 @@ def convert_hdar_tuples(hdar_tuples):
     xyz_tuples = []
     for t in hdar_tuples:
         xyz_tuples.append(hdar_to_xyz(t))
+        bar = xyz_tuples[-1]
+        print('%d %d %d | %d %d %d | %f %f %f'%(t[4], t[5], t[6], t[0],t[1],t[2],bar[0],bar[1],bar[2]))
     return xyz_tuples
 
 def print_xyz_tuples(tuples):
@@ -114,6 +119,7 @@ def print_xyz_tuples(tuples):
 
 def write_xyz_tuples(tuples):
     fd = open('/tmp/__xyz', 'w')
+    i = 0
     for t in tuples:
         fd.write("%lf %lf %lf"%(t[0], t[1], t[2]) + '\n')
     fd.close()

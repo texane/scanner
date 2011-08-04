@@ -3,6 +3,33 @@
  . model is V = 1 / (D + K)
   . in the spec, K = 0.42 but it depends on the sharp model + calibration data
 
+. build your own scanner course
+ . http://mesh.brown.edu/byo3d/
+
+. introduction
+ . http://www.instructables.com/id/Structured-Light-3D-Scanning/
+ . the basic idea behind 3d scanners
+  . if we have a lighted ball and 2 camera
+  . if the 2 camera see the ball
+  . if we know the 2 camera angles
+  . if we know the distance between camera
+  . then by triangulation, we can know D, the distance with the object
+   . this is called triangulation, same process used in sharps
+  . if we replace one of the camera by a laser, same process except the
+  object looked for is not the ball, but a laser point
+  . if we move the laser, we can create a line: the scanline
+   . acquistion time is much faster
+  . if we project a bunch of lines at a time, the acquisition time is now
+  reduced. there is no need for multiple lasers: the same effect can be
+  achieved by playing with light patterns: this is called structured light
+
+. methods for 3d reconstructions
+ . http://www.vision.caltech.edu/bouguetj/thesis/thesis.html
+
+. physical scanner construction
+ . http://amsterdam.fablab.nl/node/2609
+ . http://www.make-digital.com/make/vol21/?pg=56&pm=2&u1=friend#pg56
+
 . meshing
  . http://pille.iwr.uni-heidelberg.de/~laserscan01/textbody.html
 
@@ -17,3 +44,13 @@
 
 . software
  . http://www.ros.org/wiki/laser_pipeline
+ . http://sites.google.com/site/structuredlight/implementations
+ . http://www.cs.columbia.edu/~pblaer/projects/photo/
+  . http://www.cs.columbia.edu/~pblaer/projects/photo/shadow_scanning.tgz
+ . http://sites.google.com/site/colinord/Home/diy-3d-scanner/2009
+ . http://wiki.makerbot.com/makerscanner
+ . https://launchpad.net/scandraid
+
+. structured light
+ . http://sites.google.com/site/structuredlight/
+ . http://vis.uky.edu/~realtime3d/
