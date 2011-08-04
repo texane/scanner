@@ -1,4 +1,6 @@
-<conf>
+<?xml version="1.0"?>
+
+<opencv_storage>
 
   <output>
     <output_directory>/tmp/o</output_directory>
@@ -61,4 +63,4 @@
     <display_window_width_pixels>640</display_window_width_pixels>
   </visualization>
 
-</conf>
+</opencv_storage>
