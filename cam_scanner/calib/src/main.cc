@@ -5,6 +5,9 @@
 #include <string>
 #include <cv.h>
 #include <highgui.h>
+#include "cvStructuredLight.hh"
+#include "cvCalibrateProCam.hh"
+#include "cvUtilProCam.hh"
 
 
 static std::string make_indexed_name(const std::string& dirname, unsigned int i)
@@ -81,6 +84,13 @@ int main(int ac, char** av)
 {
   CvCapture* cap = directory_to_capture(av[1]);
   if (cap == NULL) return -1;
+
+  slParams params;
+  slCalib calib;
+  readConfiguration("../conf/conf.xml", &params);
+  runCameraCalibration(cap, &params, &calib);
+  displayCamCalib(&calib);
+
   cvReleaseCapture(&cap);
   return 0;
 }
