@@ -80,7 +80,7 @@ static CvCapture* directory_to_capture(const std::string& dirname)
   return avi_to_capture(aviname);
 }
 
-static int allocate_calib_params(slCalib& sl_calib, const slParams& sl_params)
+static int allocate_calib(slCalib& sl_calib, const slParams& sl_params)
 {
   // return -1 on error
 
@@ -116,16 +116,38 @@ static int allocate_calib_params(slCalib& sl_calib, const slParams& sl_params)
 
 int main(int ac, char** av)
 {
-  CvCapture* cap = directory_to_capture(av[1]);
-  if (cap == NULL) return -1;
-
   slParams params;
   slCalib calib;
   readConfiguration("../conf/conf.xml", &params);
-  allocate_calib_params(calib, params);
-  runCameraCalibration(cap, &params, &calib);
-  displayCamCalib(&calib);
+  allocate_calib(calib, params);
 
-  cvReleaseCapture(&cap);
+#if 0
+  // camera calibration
+  {
+    CvCapture* cap = directory_to_capture(av[1]);
+    if (cap == NULL) return -1;
+    runCameraCalibration(cap, &params, &calib);
+    cvReleaseCapture(&cap);
+  }
+#endif
+
+  // projector and camera calibration
+  {
+    CvCapture* cap = directory_to_capture(av[1]);
+    if (cap == NULL) return -1;
+    runProjectorCalibration(cap, &params, &calib, true);
+    cvReleaseCapture(&cap);
+  }
+
+#if 0
+  // extrinsic calibration
+  {
+    CvCapture* cap = directory_to_capture(av[1]);
+    if (cap == NULL) return -1;
+    runProCamExtrinsicCalibration(cap, &params, &calib);
+    cvReleaseCapture(&cap);
+  }
+#endif
+
   return 0;
 }

@@ -102,7 +102,8 @@ struct slCalib{
 
 	// Flags to indicate calibration status.
 	bool cam_intrinsic_calib;       // flag to indicate state of intrinsic camera calibration
-    bool proj_intrinsic_calib;		// flag to indicate state of intrinsic projector calibration
+	bool proj_intrinsic_calib;	// flag to indicate state of intrinsic projector calibration
+	bool cam_extrinsic_calib;	// flag to indicate state of extrinsic camera calibration
 	bool procam_extrinsic_calib;    // flag to indicate state of extrinsic projector-camera calibration
 
 	// Background model (used to segment foreground objects of interest from static background).

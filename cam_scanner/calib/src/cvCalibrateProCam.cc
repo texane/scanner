@@ -468,6 +468,12 @@ int runProjectorCalibration(CvCapture* capture,
 	// Initialize capture and allocate storage.
 	printf("Press 'n' (in 'camWindow') to capture next image, or 'ESC' to quit.\n");
 	IplImage* cam_frame   = cvQueryFrame2(capture, sl_params);
+	if (cam_frame == NULL)
+	{
+	  printf("cam_frame == NULL\n");
+	  return -1;
+	}
+
 	IplImage* cam_frame_1 = cvCreateImage(cvGetSize(cam_frame), cam_frame->depth, cam_frame->nChannels);
 	IplImage* cam_frame_2 = cvCreateImage(cvGetSize(cam_frame), cam_frame->depth, cam_frame->nChannels);
 	IplImage* cam_frame_3 = cvCreateImage(cvGetSize(cam_frame), cam_frame->depth, cam_frame->nChannels);
@@ -484,14 +490,14 @@ int runProjectorCalibration(CvCapture* capture,
 	HWND camWindow = (HWND)cvGetWindowHandle("camWindow");
 	BringWindowToTop(camWindow);
 #endif
-	cvWaitKey(1);
+	cvWaitKey(10000);
 
     // Create a window to display projector image.
 	IplImage* proj_frame = cvCreateImage(cvSize(sl_params->proj_w, sl_params->proj_h), IPL_DEPTH_8U, 1);
 	cvSet(proj_frame, cvScalar(255.0));
 	cvScale(proj_frame, proj_frame, 2.*(sl_params->proj_gain/100.), 0);
 	cvShowImage("projWindow", proj_frame);
-	cvWaitKey(1);
+	cvWaitKey(10000);
 
 	// Allocate storage for grayscale images.
 	IplImage* cam_frame_1_gray = cvCreateImage(cvGetSize(cam_frame), IPL_DEPTH_8U, 1);
@@ -504,7 +510,14 @@ int runProjectorCalibration(CvCapture* capture,
 	while(successes < n_boards){
 
 		// Get next available "safe" frame.
-		cam_frame = cvQueryFrameSafe(capture, sl_params);
+		printf("[0] cvQueryFrame2\n");
+		cam_frame = cvQueryFrame2(capture, sl_params);
+		if (cam_frame == NULL) 
+		{
+		  printf("[0] cam_frame == NULL\n");
+		  break ;
+		}
+
 		cvScale(cam_frame, cam_frame, 2.*(sl_params->cam_gain/100.), 0);
 		cvCopyImage(cam_frame, cam_frame_1);
 
@@ -515,6 +528,8 @@ int runProjectorCalibration(CvCapture* capture,
 
 		// If camera chessboard is found, attempt to detect projector chessboard.
 		if(cam_corner_count == cam_board_n){
+
+			printf("cam_corner_count == cam_board_n\n");
 		
 			// Display projector chessboard.
 			cvCopy(proj_chessboard, proj_frame);
@@ -522,10 +537,17 @@ int runProjectorCalibration(CvCapture* capture,
 			cvShowImage("projWindow", proj_frame);
 
 			// Get next available "safe" frame (after appropriate delay).
-			cvKey_temp = cvWaitKey(sl_params->delay);
+			cvKey_temp = cvWaitKey(10000);
 			if(cvKey_temp != -1) 
 				cvKey = cvKey_temp;
-			cam_frame = cvQueryFrameSafe(capture, sl_params);
+			printf("[1] cvQueryFrame2\n");
+			cam_frame = cvQueryFrame2(capture, sl_params);
+			if (cam_frame == NULL)
+			{
+			  printf("[1] cam_frame == NULL\n");
+			  break ;
+			}
+
 			cvScale(cam_frame, cam_frame, 2.*(sl_params->cam_gain/100.), 0);
 			cvCopyImage(cam_frame, cam_frame_2);
 			cvCopyImage(cam_frame, cam_frame_3);
@@ -533,7 +555,11 @@ int runProjectorCalibration(CvCapture* capture,
 			// Convert frames to grayscale and apply background subtraction.
 			cvCvtColor(cam_frame_1, cam_frame_1_gray, CV_RGB2GRAY);
 			cvCvtColor(cam_frame_2, cam_frame_2_gray, CV_RGB2GRAY);
+#if 0
+			// background substraction doesnot work since CvCapture not a
+			// real video stream and previous frame does not seem appropriate
 			cvSub(cam_frame_1_gray, cam_frame_2_gray, cam_frame_2_gray);
+#endif
 
 			// Invert chessboard image.
 			double min_val, max_val;
@@ -546,12 +572,19 @@ int runProjectorCalibration(CvCapture* capture,
 			int proj_corner_count;
 			int proj_found = detectChessboard(cam_frame_2_gray, proj_board_size, proj_corners, &proj_corner_count);
 
+			printf("proj_found == %d\n", proj_found);
+
+			cvShowImage("frame2gray", cam_frame_2_gray);
+			cvWaitKey(10000000);
+
 			// Display current projector tracking results.
 			cvDrawChessboardCorners(cam_frame_3, proj_board_size, proj_corners, proj_corner_count, proj_found);
 			cvShowImageResampled((char*)"camWindow", cam_frame_3, sl_params->window_w, sl_params->window_h);
 
 			// If chessboard is detected, then update calibration lists.
 			if(captureFrame & (proj_corner_count == proj_board_n)){
+
+				printf("proj_corner_count == proj_board_n\n");
 
 				// Add camera calibration data.
 				for(int i=successes*cam_board_n, j=0; j<cam_board_n; ++i,++j){
@@ -575,7 +608,7 @@ int runProjectorCalibration(CvCapture* capture,
 				// Update display.
 				successes++;
 				printf("+ Captured frame %d of %d.\n",successes,n_boards);
-				captureFrame = false;
+				// captureFrame = false;
 			}
 
 			// Free allocated resources.
@@ -608,19 +641,22 @@ int runProjectorCalibration(CvCapture* capture,
 		delete[] cam_corners;
 
 		// Process user input.
-		cvKey_temp = cvWaitKey(10);
+		cvKey_temp = cvWaitKey(10000);
 		if(cvKey_temp != -1)
 			cvKey = cvKey_temp;
-		if(cvKey==27)
-			break;
+		if(cvKey==27) break ;
+#if 0 // always set captureFrame
 		else if(cvKey=='n')
-			captureFrame = true;
+#endif
+		captureFrame = true;
 		cvKey_temp = -1;
 		cvKey = -1;
 	}
 
 	// Close the display window.
 	cvDestroyWindow((char*)"camWindow");
+
+	printf("successes: %d\n", successes);
 
 	// Calibrate projector, if minimum number of frames are available.
 	if(successes >= 2){
@@ -928,6 +964,302 @@ int runProjectorCalibration(CvCapture* capture,
 	return 0;
 }
 
+#if 0 // not implemented
+int runCamExtrinsicCalibration
+(CvCapture* capture, struct slParam* sl_params, struct slCalib* sl_calib)
+{
+  // Reset projector-camera calibration status (will be set again, if successful).
+  sl_calib->cam_extrinsic_calib = false;
+
+  // Check that projector and camera have already been calibrated.
+  if (!sl_calib->cam_intrinsic_calib) return -1;
+
+  // Define number of calibration boards (one for now).
+  int n_boards = 1;
+
+  // Evaluate derived camera chessboard parameters and allocate storage.
+  int cam_board_n                = sl_params->cam_board_w*sl_params->cam_board_h;
+  CvSize cam_board_size          = cvSize(sl_params->cam_board_w, sl_params->cam_board_h);
+  CvMat* cam_image_points        = cvCreateMat(n_boards*cam_board_n, 2, CV_32FC1);
+  CvMat* cam_object_points       = cvCreateMat(n_boards*cam_board_n, 3, CV_32FC1);
+  CvMat* cam_point_counts        = cvCreateMat(n_boards, 1, CV_32SC1);
+  IplImage** cam_calibImages     = new IplImage* [n_boards];
+  CvMat* cam_rotation_vectors    = cvCreateMat(n_boards, 3, CV_32FC1);
+  CvMat* cam_translation_vectors = cvCreateMat(n_boards, 3, CV_32FC1);
+
+  // Initialize capture and allocate storage.
+  printf("Press 'n' (in 'camWindow') to capture alignment image, or 'ESC' to quit.\n");
+  IplImage* cam_frame   = cvQueryFrame2(capture, sl_params);
+  IplImage* cam_frame_1 = cvCreateImage(cvGetSize(cam_frame), cam_frame->depth, cam_frame->nChannels);
+  IplImage* cam_frame_2 = cvCreateImage(cvGetSize(cam_frame), cam_frame->depth, cam_frame->nChannels);
+  IplImage* cam_frame_3 = cvCreateImage(cvGetSize(cam_frame), cam_frame->depth, cam_frame->nChannels);
+  for(int i=0; i<n_boards; i++)
+    cam_calibImages[i]  = cvCreateImage(cvGetSize(cam_frame), cam_frame->depth, cam_frame->nChannels);
+
+  // Create a window to display captured frames.
+  cvNamedWindow("camWindow", CV_WINDOW_AUTOSIZE);
+  cvCreateTrackbar("Cam. Gain",  "camWindow", &sl_params->cam_gain,  100, NULL);
+#if !defined(__linux__)
+  HWND camWindow = (HWND)cvGetWindowHandle("camWindow");
+  BringWindowToTop(camWindow);
+#endif
+  cvWaitKey(1);
+
+  // Allocate storage for grayscale images.
+  IplImage* cam_frame_1_gray = cvCreateImage(cvGetSize(cam_frame), IPL_DEPTH_8U, 1);
+  IplImage* cam_frame_2_gray = cvCreateImage(cvGetSize(cam_frame), IPL_DEPTH_8U, 1);
+
+  // Capture live image stream, until "ESC" is pressed or calibration is complete.
+  int successes = 0;
+  bool captureFrame = false;
+  int cvKey = -1, cvKey_temp = -1;
+  while(successes < n_boards){
+
+    // Get next available "safe" frame.
+    cam_frame = cvQueryFrameSafe(capture, sl_params);
+    cvScale(cam_frame, cam_frame, 2.*(sl_params->cam_gain/100.), 0);
+    cvCopyImage(cam_frame, cam_frame_1);
+
+    // Find camera chessboard corners.
+    CvPoint2D32f* cam_corners = new CvPoint2D32f[cam_board_n];
+    int cam_corner_count;
+    int cam_found = detectChessboard(cam_frame_1, cam_board_size, cam_corners, &cam_corner_count);
+
+    // If camera chessboard is found, attempt to detect projector chessboard.
+    if(cam_corner_count == cam_board_n){
+		
+      // Get next available "safe" frame (after appropriate delay).
+      cvKey_temp = cvWaitKey(sl_params->delay);
+      if(cvKey_temp != -1) 
+	cvKey = cvKey_temp;
+      cam_frame = cvQueryFrameSafe(capture, sl_params);
+      cvScale(cam_frame, cam_frame, 2.*(sl_params->cam_gain/100.), 0);
+      cvCopyImage(cam_frame, cam_frame_2);
+
+      // Convert to grayscale and apply background subtraction.
+      cvCvtColor(cam_frame_1, cam_frame_1_gray, CV_RGB2GRAY);
+      cvCvtColor(cam_frame_2, cam_frame_2_gray, CV_RGB2GRAY);
+      cvSub(cam_frame_1_gray, cam_frame_2_gray, cam_frame_2_gray);
+
+      // Invert chessboard image.
+      double min_val, max_val;
+      cvMinMaxLoc(cam_frame_2_gray, &min_val, &max_val);
+      cvSubRS(cam_frame_2_gray, cvScalar(max_val), cam_frame_2_gray);
+
+      // Find camera chessboard corners.
+      CvPoint2D32f* proj_corners = new CvPoint2D32f[proj_board_n];
+      int proj_corner_count;
+      int proj_found = detectChessboard(cam_frame_2_gray, proj_board_size, proj_corners, &proj_corner_count);
+
+      // Display current projector tracking results.
+      cvCopyImage(cam_frame_2, cam_frame_3);
+      cvDrawChessboardCorners(cam_frame_3, proj_board_size, proj_corners, proj_corner_count, proj_found);
+      cvShowImageResampled((char*)"camWindow", cam_frame_3, sl_params->window_w, sl_params->window_h);
+
+      // If chessboard is detected, then update calibration lists.
+      if(captureFrame & (proj_corner_count == proj_board_n)){
+
+	// Add camera calibration data.
+	for(int i=successes*cam_board_n, j=0; j<cam_board_n; ++i,++j){
+	  CV_MAT_ELEM(*cam_image_points,  float, i, 0) = cam_corners[j].x;
+	  CV_MAT_ELEM(*cam_image_points,  float, i, 1) = cam_corners[j].y;
+	  CV_MAT_ELEM(*cam_object_points, float, i, 0) = sl_params->cam_board_w_mm*float(j/sl_params->cam_board_w);
+	  CV_MAT_ELEM(*cam_object_points, float, i, 1) = sl_params->cam_board_h_mm*float(j%sl_params->cam_board_w);
+	  CV_MAT_ELEM(*cam_object_points, float, i, 2) = 0.0f;
+	}
+	CV_MAT_ELEM(*cam_point_counts, int, successes, 0) = cam_board_n;
+	cvCopyImage(cam_frame_1, cam_calibImages[successes]);
+
+	// Evaluate undistorted image pixels for both the camera and the projector chessboard corners.
+	CvMat* cam_dist_image_points    = cvCreateMat(cam_board_n,  1, CV_32FC2);
+	CvMat* cam_undist_image_points  = cvCreateMat(cam_board_n,  1, CV_32FC2);
+	CvMat* proj_dist_image_points   = cvCreateMat(proj_board_n, 1, CV_32FC2);
+	CvMat* proj_undist_image_points = cvCreateMat(proj_board_n, 1, CV_32FC2);
+	for(int i=0; i<cam_board_n; ++i)
+	  cvSet1D(cam_dist_image_points,  i, cvScalar(float(cam_corners[i].x), float(cam_corners[i].y)));
+	for(int i=0; i<proj_board_n; ++i)
+	  cvSet1D(proj_dist_image_points, i, cvScalar(float(proj_corners[i].x), float(proj_corners[i].y)));
+	cvUndistortPoints(cam_dist_image_points, cam_undist_image_points, 
+			  sl_calib->cam_intrinsic, sl_calib->cam_distortion, NULL, NULL);
+	cvUndistortPoints(proj_dist_image_points, proj_undist_image_points, 
+			  sl_calib->cam_intrinsic, sl_calib->cam_distortion, NULL, NULL);
+	cvReleaseMat(&cam_dist_image_points);
+	cvReleaseMat(&proj_dist_image_points);
+
+	// Estimate homography that maps undistorted image pixels to positions on the chessboard.
+	CvMat* homography = cvCreateMat(3, 3, CV_32FC1);
+	CvMat* cam_src    = cvCreateMat(cam_board_n, 3, CV_32FC1);
+	CvMat* cam_dst    = cvCreateMat(cam_board_n, 3, CV_32FC1);
+	for(int i=0; i<cam_board_n; ++i){
+	  CvScalar pd = cvGet1D(cam_undist_image_points, i);
+	  CV_MAT_ELEM(*cam_src, float, i, 0) = (float)pd.val[0];
+	  CV_MAT_ELEM(*cam_src, float, i, 1) = (float)pd.val[1];
+	  CV_MAT_ELEM(*cam_src, float, i, 2) = 1.0;
+	  CV_MAT_ELEM(*cam_dst, float, i, 0) = CV_MAT_ELEM(*cam_object_points, float, cam_board_n*successes+i, 0);
+	  CV_MAT_ELEM(*cam_dst, float, i, 1) = CV_MAT_ELEM(*cam_object_points, float, cam_board_n*successes+i, 1);
+	  CV_MAT_ELEM(*cam_dst, float, i, 2) = 1.0;
+	}
+	cvReleaseMat(&cam_undist_image_points);
+	cvFindHomography(cam_src, cam_dst, homography);
+	cvReleaseMat(&cam_src);
+	cvReleaseMat(&cam_dst);
+
+	// Map undistorted projector image corners to positions on the chessboard plane.
+	CvMat* proj_src = cvCreateMat(proj_board_n, 1, CV_32FC2);
+	CvMat* proj_dst = cvCreateMat(proj_board_n, 1, CV_32FC2);
+	for(int i=0; i<proj_board_n; i++)
+	  cvSet1D(proj_src, i, cvGet1D(proj_undist_image_points, i));
+	cvReleaseMat(&proj_undist_image_points);
+	cvPerspectiveTransform(proj_src, proj_dst, homography);
+	cvReleaseMat(&homography);
+	cvReleaseMat(&proj_src);
+				
+	// Add projector calibration data.
+	for(int i=successes*proj_board_n, j=0; j<proj_board_n; ++i,++j){
+	  CvScalar pd = cvGet2D(proj_dst, j, 0);
+	  if(!sl_params->proj_invert){
+	    CV_MAT_ELEM(*proj_image_points,  float, i, 0) = sl_params->proj_board_w_pixels*float(j%sl_params->proj_board_w) + (float)proj_border_cols + (float)sl_params->proj_board_w_pixels - (float)0.5;
+	    CV_MAT_ELEM(*proj_image_points,  float, i, 1) = sl_params->proj_board_h_pixels*float(j/sl_params->proj_board_w) + (float)proj_border_rows + (float)sl_params->proj_board_h_pixels - (float)0.5;
+	  }
+	  else{
+	    CV_MAT_ELEM(*proj_image_points,  float, i, 0) = sl_params->proj_board_w_pixels*float((proj_board_n-j-1)%sl_params->proj_board_w) + (float)proj_border_cols + (float)sl_params->proj_board_w_pixels - (float)0.5;
+	    CV_MAT_ELEM(*proj_image_points,  float, i, 1) = sl_params->proj_board_h_pixels*float((proj_board_n-j-1)/sl_params->proj_board_w) + (float)proj_border_rows + (float)sl_params->proj_board_h_pixels - (float)0.5;
+	  }
+	  CV_MAT_ELEM(*proj_object_points, float, i, 0) = (float)pd.val[0];
+	  CV_MAT_ELEM(*proj_object_points, float, i, 1) = (float)pd.val[1];
+	  CV_MAT_ELEM(*proj_object_points, float, i, 2) = 0.0f;
+	}
+	CV_MAT_ELEM(*proj_point_counts, int, successes, 0) = proj_board_n;
+	cvCopyImage(cam_frame_2, proj_calibImages[successes]);
+	cvReleaseMat(&proj_dst);
+
+	// Update display.
+	successes++;
+	printf("+ Captured frame %d of %d.\n",successes,n_boards);
+	captureFrame = false;
+      }
+
+      // Free allocated resources.
+      delete[] proj_corners;
+
+      // Display white image for next camera capture frame.
+      cvSet(proj_frame, cvScalar(255));
+      cvScale(proj_frame, proj_frame, 2.*(sl_params->proj_gain/100.), 0);
+      cvShowImage("projWindow", proj_frame);
+      cvKey_temp = cvWaitKey(sl_params->delay);
+      if(cvKey_temp != -1) 
+	cvKey = cvKey_temp;
+    }
+		else{
+			
+			// Camera chessboard not found, display current camera tracking results.
+			cvDrawChessboardCorners(cam_frame_1, cam_board_size, cam_corners, cam_corner_count, cam_found);
+			cvShowImageResampled((char*)"camWindow", cam_frame_1, sl_params->window_w, sl_params->window_h);
+
+			// Display white image for next camera capture frame.
+			cvSet(proj_frame, cvScalar(255));
+			cvScale(proj_frame, proj_frame, 2.*(sl_params->proj_gain/100.), 0);
+			cvShowImage((char*)"projWindow", proj_frame);
+			cvKey_temp = cvWaitKey(1);
+			if(cvKey_temp != -1) 
+				cvKey = cvKey_temp;
+		}
+
+		// Free allocated resources.
+		delete[] cam_corners;
+		
+		// Process user input.
+		cvKey_temp = cvWaitKey(10);
+		if(cvKey_temp != -1)
+			cvKey = cvKey_temp;
+		if(cvKey==27)
+			break;
+		else if(cvKey=='n')
+			captureFrame = true;
+		cvKey_temp = -1;
+		cvKey = -1;
+	}
+
+	// Close the display window.
+	cvDestroyWindow("camWindow");
+
+	// Calibrate projector-camera alignment, if a single frame is available.
+	if(successes == 1){
+		
+		// Estimate extrinsic camera parameters.
+		cvFindExtrinsicCameraParams2(
+			cam_object_points, cam_image_points, 
+			sl_calib->cam_intrinsic, sl_calib->cam_distortion,
+			cam_rotation_vectors, cam_translation_vectors);
+
+		// Estimate extrinsic projector parameters.
+		cvFindExtrinsicCameraParams2(
+			proj_object_points, proj_image_points, 
+			sl_calib->proj_intrinsic, sl_calib->proj_distortion,
+			proj_rotation_vectors, proj_translation_vectors);
+
+		// Save extrinsic calibration of projector-camera system.
+		// Note: First calibration image is used to define extrinsic calibration.
+		for(int i=0; i<3; i++)
+			CV_MAT_ELEM(*sl_calib->cam_extrinsic, float, 0, i) = (float)cvmGet(cam_rotation_vectors, 0, i);
+		for(int i=0; i<3; i++)
+			CV_MAT_ELEM(*sl_calib->cam_extrinsic, float, 1, i) = (float)cvmGet(cam_translation_vectors, 0, i);
+		char str[1024], calibDir[1024];
+		sprintf(calibDir, "%s" SLASH_STRING "calib" SLASH_STRING "proj", sl_params->outdir);
+		sprintf(str, "%s" SLASH_STRING "cam_extrinsic.xml", calibDir);
+		cvSave(str, sl_calib->cam_extrinsic);
+		for(int i=0; i<3; i++)
+			CV_MAT_ELEM(*sl_calib->proj_extrinsic, float, 0, i) = (float)cvmGet(proj_rotation_vectors, 0, i);
+		for(int i=0; i<3; i++)
+			CV_MAT_ELEM(*sl_calib->proj_extrinsic, float, 1, i) = (float)cvmGet(proj_translation_vectors, 0, i);
+		sprintf(str, "%s" SLASH_STRING "proj_extrinsic.xml", calibDir);
+		cvSave(str, sl_calib->proj_extrinsic);
+		sprintf(str,"%s" SLASH_STRING "config.xml", calibDir);
+		writeConfiguration(str, sl_params);
+	}
+	else{
+		printf("ERROR: At least one chessboard is required!\n");
+		printf("Projector-camera alignment was not successful and must be repeated.\n");
+		return -1;
+	}
+
+	// Set projector-camera calibration status.
+	sl_calib->procam_extrinsic_calib = true;
+
+	// Evaluate projector-camera geometry.
+	evaluateProCamGeometry(sl_params, sl_calib);
+
+	// Free allocated resources.
+	cvReleaseMat(&cam_image_points);
+    cvReleaseMat(&cam_object_points);
+    cvReleaseMat(&cam_point_counts);
+	cvReleaseMat(&cam_rotation_vectors);
+  	cvReleaseMat(&cam_translation_vectors);
+	cvReleaseMat(&proj_image_points);
+    cvReleaseMat(&proj_object_points);
+    cvReleaseMat(&proj_point_counts);
+	cvReleaseMat(&proj_rotation_vectors);
+  	cvReleaseMat(&proj_translation_vectors);
+	cvReleaseImage(&proj_chessboard);
+	cvReleaseImage(&cam_frame_1);
+	cvReleaseImage(&cam_frame_2);
+	cvReleaseImage(&cam_frame_3);
+	cvReleaseImage(&proj_frame);
+	cvReleaseImage(&cam_frame_1_gray);
+	cvReleaseImage(&cam_frame_2_gray);
+	for(int i=0; i<n_boards; i++){
+		cvReleaseImage(&cam_calibImages[i]);
+		cvReleaseImage(&proj_calibImages[i]);
+	}
+	delete[] cam_calibImages;
+	delete[] proj_calibImages;
+
+	// Return without errors.
+	printf("Projector-camera alignment was successful.\n");
+	return 0;
+}
+#endif // not implemented
+
 // Run projector-camera extrinsic calibration.
 int runProCamExtrinsicCalibration(CvCapture* capture, 
 							      struct slParams* sl_params, 
@@ -1013,7 +1345,8 @@ int runProCamExtrinsicCalibration(CvCapture* capture,
 	while(successes < n_boards){
 
 		// Get next available "safe" frame.
-		cam_frame = cvQueryFrameSafe(capture, sl_params);
+		cam_frame = cvQueryFrame2(capture, sl_params);
+		if (cam_frame == NULL) break ;
 		cvScale(cam_frame, cam_frame, 2.*(sl_params->cam_gain/100.), 0);
 		cvCopyImage(cam_frame, cam_frame_1);
 
@@ -1031,17 +1364,21 @@ int runProCamExtrinsicCalibration(CvCapture* capture,
 			cvShowImage("projWindow", proj_frame);
 
 			// Get next available "safe" frame (after appropriate delay).
-			cvKey_temp = cvWaitKey(sl_params->delay);
+			cvKey_temp = cvWaitKey(100000);
 			if(cvKey_temp != -1) 
 				cvKey = cvKey_temp;
-			cam_frame = cvQueryFrameSafe(capture, sl_params);
+			cam_frame = cvQueryFrame2(capture, sl_params);
 			cvScale(cam_frame, cam_frame, 2.*(sl_params->cam_gain/100.), 0);
 			cvCopyImage(cam_frame, cam_frame_2);
 
 			// Convert to grayscale and apply background subtraction.
 			cvCvtColor(cam_frame_1, cam_frame_1_gray, CV_RGB2GRAY);
 			cvCvtColor(cam_frame_2, cam_frame_2_gray, CV_RGB2GRAY);
+#if 0
+			// background substraction doesnot work since CvCapture not a
+			// real video stream and previous frame does not seem appropriate
 			cvSub(cam_frame_1_gray, cam_frame_2_gray, cam_frame_2_gray);
+#endif
 
 			// Invert chessboard image.
 			double min_val, max_val;
@@ -1148,7 +1485,7 @@ int runProCamExtrinsicCalibration(CvCapture* capture,
 			cvSet(proj_frame, cvScalar(255));
 			cvScale(proj_frame, proj_frame, 2.*(sl_params->proj_gain/100.), 0);
 			cvShowImage("projWindow", proj_frame);
-			cvKey_temp = cvWaitKey(sl_params->delay);
+			cvKey_temp = cvWaitKey(100000);
 			if(cvKey_temp != -1) 
 				cvKey = cvKey_temp;
 		}
@@ -1162,7 +1499,7 @@ int runProCamExtrinsicCalibration(CvCapture* capture,
 			cvSet(proj_frame, cvScalar(255));
 			cvScale(proj_frame, proj_frame, 2.*(sl_params->proj_gain/100.), 0);
 			cvShowImage((char*)"projWindow", proj_frame);
-			cvKey_temp = cvWaitKey(1);
+			cvKey_temp = cvWaitKey(100000);
 			if(cvKey_temp != -1) 
 				cvKey = cvKey_temp;
 		}
@@ -1171,13 +1508,15 @@ int runProCamExtrinsicCalibration(CvCapture* capture,
 		delete[] cam_corners;
 		
 		// Process user input.
-		cvKey_temp = cvWaitKey(10);
+		cvKey_temp = cvWaitKey(100000);
 		if(cvKey_temp != -1)
 			cvKey = cvKey_temp;
 		if(cvKey==27)
 			break;
+#if 0
 		else if(cvKey=='n')
 			captureFrame = true;
+#endif
 		cvKey_temp = -1;
 		cvKey = -1;
 	}
