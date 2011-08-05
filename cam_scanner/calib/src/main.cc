@@ -33,7 +33,7 @@ static int create_avi(const std::string& dirname, const std::string& aviname)
   cvReleaseImage(&iplimage);
 
   CvVideoWriter* writer = cvCreateVideoWriter
-    (aviname.c_str(), CV_FOURCC('P','I','M','1'), 25, imsize, true);
+    (aviname.c_str(), CV_FOURCC('P','I','M','1'), 1, imsize, true);
 
   if (writer == NULL) return -1;
 
@@ -80,6 +80,40 @@ static CvCapture* directory_to_capture(const std::string& dirname)
   return avi_to_capture(aviname);
 }
 
+static int allocate_calib_params(slCalib& sl_calib, const slParams& sl_params)
+{
+  // return -1 on error
+
+  const int cam_nelems = sl_params.cam_w * sl_params.cam_h;
+  const int proj_nelems = sl_params.proj_w * sl_params.proj_h;
+
+  sl_calib.cam_intrinsic_calib = false;
+  sl_calib.proj_intrinsic_calib = false;
+  sl_calib.procam_extrinsic_calib = false;
+  sl_calib.cam_intrinsic = cvCreateMat(3,3,CV_32FC1);
+  sl_calib.cam_distortion = cvCreateMat(5,1,CV_32FC1);
+  sl_calib.cam_extrinsic = cvCreateMat(2, 3, CV_32FC1);
+  sl_calib.proj_intrinsic = cvCreateMat(3, 3, CV_32FC1);
+  sl_calib.proj_distortion = cvCreateMat(5, 1, CV_32FC1);
+  sl_calib.proj_extrinsic = cvCreateMat(2, 3, CV_32FC1);
+  sl_calib.cam_center = cvCreateMat(3, 1, CV_32FC1);
+  sl_calib.proj_center = cvCreateMat(3, 1, CV_32FC1);
+  sl_calib.cam_rays = cvCreateMat(3, cam_nelems, CV_32FC1);
+  sl_calib.proj_rays = cvCreateMat(3, proj_nelems, CV_32FC1);
+  sl_calib.proj_column_planes = cvCreateMat(sl_params.proj_w, 4, CV_32FC1);
+  sl_calib.proj_row_planes = cvCreateMat(sl_params.proj_h, 4, CV_32FC1);
+
+  // initialize background model
+  sl_calib.background_depth_map = cvCreateMat(sl_params.cam_h, sl_params.cam_w, CV_32FC1);
+  sl_calib.background_image = cvCreateImage(cvSize(sl_params.cam_w, sl_params.cam_h), IPL_DEPTH_8U, 3);
+  sl_calib.background_mask = cvCreateImage(cvSize(sl_params.cam_w, sl_params.cam_h), IPL_DEPTH_8U, 1);
+  cvSet(sl_calib.background_depth_map, cvScalar(FLT_MAX));
+  cvZero(sl_calib.background_image);
+  cvSet(sl_calib.background_mask, cvScalar(255));
+
+  return 0;
+} 
+
 int main(int ac, char** av)
 {
   CvCapture* cap = directory_to_capture(av[1]);
@@ -88,6 +122,7 @@ int main(int ac, char** av)
   slParams params;
   slCalib calib;
   readConfiguration("../conf/conf.xml", &params);
+  allocate_calib_params(calib, params);
   runCameraCalibration(cap, &params, &calib);
   displayCamCalib(&calib);
 

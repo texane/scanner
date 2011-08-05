@@ -182,10 +182,15 @@ int runCameraCalibration(CvCapture* capture,
 #endif
 
 	// Prompt user for maximum number of calibration boards.
+	int n_boards;
+#if 0
 	printf("Enter the maximum number of calibration images, then press return.\n");
 	printf("+ Maximum number of images = ");
-	int n_boards;
 	scanf("%d", &n_boards);
+#else
+	printf("+ Maximum number of images set to 10\n");
+	n_boards = 9;
+#endif
 	if(n_boards<2){
 		printf("ERROR: At least two images are required!\n");
 	    printf("Camera calibration was not successful and must be repeated.\n");
@@ -223,6 +228,10 @@ int runCameraCalibration(CvCapture* capture,
 
 		// Get next available frame.
 		frame = cvQueryFrame2(capture, sl_params);
+
+		// stop on NULL frame
+		if (frame == NULL) break ;
+
 		cvScale(frame, frame, 2.*(sl_params->cam_gain/100.), 0);
 
 		// Find chessboard corners.
@@ -239,10 +248,10 @@ int runCameraCalibration(CvCapture* capture,
 				CV_MAT_ELEM(*object_points, float, i, 1) = sl_params->cam_board_h_mm*float(j%sl_params->cam_board_w);
 				CV_MAT_ELEM(*object_points, float, i, 2) = 0.0f;
 			}
+
 			CV_MAT_ELEM(*point_counts, int, successes, 0) = board_n;
 			cvCopyImage(frame, calibImages[successes]);
 			successes++;
-			printf("+ Captured frame %d of %d.\n", successes, n_boards);
 			captureFrame = false;
 		}
 
@@ -254,11 +263,13 @@ int runCameraCalibration(CvCapture* capture,
 		delete[] corners;
 
 		// Process user input.
-		int cvKey = cvWaitKey(10);
+		int cvKey = cvWaitKey(10000);
 		if(cvKey==27)
 			break;
+#if 0 // always set captureFrame
 		else if(cvKey=='n')
-			captureFrame = true;
+#endif
+		 captureFrame = true;
 	}
 
 	// Close the display window.
@@ -410,10 +421,15 @@ int runProjectorCalibration(CvCapture* capture,
 #endif
 
 	// Prompt user for maximum number of calibration boards.
+	int n_boards;
+#if 0
 	printf("Enter the maximum number of calibraiton images, then press return.\n");
 	printf("+ Maximum number of images = ");
-	int n_boards;
 	scanf("%d", &n_boards);
+#else
+	printf("+ Maximum number of images set to 10\n");
+	n_boards = 10;
+#endif
 	if(n_boards<2){
 		printf("ERROR: At least two images are required!\n");
 	    if(calibrate_both)
