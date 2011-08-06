@@ -96,15 +96,21 @@ disp('Displaying user-selected pixels/rays...');
 
 % Draw camera rays for user-selected pixel(s).
 disp('   + select pixels with any mouse button, then press enter to continue...');
-figure(1);
+clf; figure(1);
 xlabel('select pixels with any mouse button, then press enter to continue');
-x = ginput;
-V = Rc_h'*pixel2ray(x',fc,cc,kc,alpha_c);
-figure(2);
+% matlab
+% x = ginput;
+% octave
+[x, y] = ginput;
+x = [x' ; y'];
+V = Rc_h'*pixel2ray(x,fc,cc,kc,alpha_c);
+clf; figure(2);
 hold on;
    X = repmat(C,1,size(V,2));
-   quiver3(X(1,:),X(2,:),X(3,:),V(1,:),V(2,:),V(3,:),2000,'r');
+%   quiver3(X(1,:),X(2,:),X(3,:),V(1,:),V(2,:),V(3,:),2000,'r');
+   quiver3(X(1,:),X(2,:),X(3,:),V(1,:),V(2,:),V(3,:),2000);
 hold off;
 
 % Return to Matlab prompt.
+ginput ;
 disp(' ');

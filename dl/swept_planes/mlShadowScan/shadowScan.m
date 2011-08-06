@@ -101,7 +101,6 @@ disp('     (click on top-left and bottom-right corners of reference area)');
 figure(1); clf; set(gcf,'Name','Reference Area for "Horizontal" Plane');
 imagesc(frame); axis image;
 title('Reference Area for "Horizontal" Plane');
-title('Reference Area for "Horizontal" Plane');
 xlabel('click on the top-left and bottom-right corners of reference area');
 % octave
 [x, y] = ginput;
@@ -317,13 +316,14 @@ axis([-200 800 -1300 500 -100 1000]);
 xlabel('x'); ylabel('y'); zlabel('z');
 
 % Clip the recovered 3D point cloud using the bounding volume.
-% clip = find( (vertices(:,1) >= clipRangeX(1) & vertices(:,1) <= clipRangeX(2)) & ...
-%              (vertices(:,2) >= clipRangeY(1) & vertices(:,2) <= clipRangeY(2)) & ...
-%              (vertices(:,3) >= clipRangeZ(1) & vertices(:,3) <= clipRangeZ(2)) );
+clip = find( (vertices(:,1) >= clipRangeX(1) & vertices(:,1) <= clipRangeX(2)) & ...
+             (vertices(:,2) >= clipRangeY(1) & vertices(:,2) <= clipRangeY(2)) & ...
+             (vertices(:,3) >= clipRangeZ(1) & vertices(:,3) <= clipRangeZ(2)) );
 
-clip = find( (vertices(:,1) != -42) & ...
-             (vertices(:,2) != -42) & ...
-             (vertices(:,3) != -42) );
+% dont clib
+% clip = find( (vertices(:,1) != -42) & ...
+%             (vertices(:,2) != -42) & ...
+%             (vertices(:,3) != -42) );
 
 % Display the recovered 3D point cloud (with per-vertex color).
 % Note: Convert to indexed color map for use with FSCATTER3.
