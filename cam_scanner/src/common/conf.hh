@@ -18,6 +18,7 @@ typedef struct conf
 
 
 int load_conf(conf_t&, const std::string&);
+int store_conf(const conf_t&, const std::string&);
 
 
 #endif // ! COMMON_CONF_HH_INCLUDED
