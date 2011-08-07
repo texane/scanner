@@ -12,12 +12,18 @@ if (!(__c))								\
   return __n;								\
 }
 
-
 #define ASSERT_GOTO(__c, __l)						\
 if (!(__c))								\
 {									\
   ::printf("[ASSERTION_FAILED %s/%u]: %s\n", __FILE__, __LINE__, #__c);	\
   goto __l;								\
+}
+
+#define ASSERT_BREAK(__c)						\
+if (!(__c))								\
+{									\
+  ::printf("[ASSERTION_FAILED %s/%u]: %s\n", __FILE__, __LINE__, #__c);	\
+  break;								\
 }
 
 

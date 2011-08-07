@@ -49,6 +49,7 @@ int main(int ac, char** av)
     if (key == 27) break;
 
     IplImage* const frame = cvQueryFrame(cap);
+      // fixme: capture not released
     ASSERT_GOTO(frame != NULL, on_error);
 
     cvShowImage(frame_window, frame);
@@ -56,6 +57,7 @@ int main(int ac, char** av)
     if (key == ' ')
     {
       IplImage* const cloned = cvCloneImage(frame);
+      // fixme: capture not released
       ASSERT_GOTO(cloned != NULL, on_error);
 
       frames.push_back(cloned);
@@ -87,5 +89,12 @@ int main(int ac, char** av)
   }
 
  on_error:
+  // release frames
+  {
+  std::list<IplImage*>::iterator pos = frames.begin();
+  std::list<IplImage*>::iterator end = frames.end();
+  for (; pos != end; ++pos) cvReleaseImage(&(*pos));
+  }
+
   return err;
 }
