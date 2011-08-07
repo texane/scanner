@@ -37,7 +37,7 @@ int load_conf(conf_t& conf, const std::string& confname)
   if (m == NULL) goto on_error;
   s = cvReadStringByName(fs, m, "frames_dirname", NULL);
   if (s == NULL) goto on_error;
-  conf.calib_frames_dirname = s;
+  conf.scan_frames_dirname = s;
 
   // success
   err = 0;

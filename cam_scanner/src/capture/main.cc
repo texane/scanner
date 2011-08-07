@@ -32,7 +32,7 @@ int main(int ac, char** av)
   // load project conf
   {
     std::string confname = projname + "/conf.xml";
-    err = load_conf(conf, std::string(av[1]));
+    err = load_conf(conf, confname);
     ASSERT_GOTO(err == 0, on_error);
   }
 
