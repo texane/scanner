@@ -29,7 +29,12 @@ int main(int ac, char** av)
 
   // initialize a default configuration
   conf.proj_dirname = dirname;
-  if (do_mkdir(dirname.c_str()) == -1) return -1;
+  if (do_mkdir(dirname.c_str()) == -1)
+  {
+    printf("[!] cannot create project directory\n");
+    printf("[!] remove manually if it already exists\n");
+    return -1;
+  }
 
   conf.calib_frames_dirname = "calib_frames";
   subname = dirname + "/" + conf.calib_frames_dirname.c_str();
