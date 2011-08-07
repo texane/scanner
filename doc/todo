@@ -1,18 +1,29 @@
-. device
- . scan multiple time per step instead of doing multiple pass
- . receive commands from host
+. software chain
+ . in a first time, the scanning program will be implemented as a toolchain.
+ In next version a gui will avoid the command line usage.
 
-. host
- . commands sending (sync, scanning range, calibration...)
+ . scanning is done by creating a new project. a project is first initialized
+ with default settings that can be changed by the user. Then calibration and
+ scanning sequences  are acquired. If not yet done, a calibration step must
+ performed. Scanning is  finally done and outputs a pointcloud into a given
+ directory. The toolchain consists of the following programs:
+  . init projname
+   . initialize a directory for the project projname
+  . capture projname {calib,scan}
+   . capture calibration and scanning sequences for the projname
+  . calib projname
+  . scan projname
 
-. process_dat
- . calibration, measurement
-  . how long one step
-  . how long is 1mv
-   -> plot in a true unit system
- . averaging
-  -> dont use arithmetic mean, variance, stddev
- . median filtering
-  -> given kernel size
-   -> approx 4 or 5 steps
-  -> smooth he peaks ... (median filtering should do)
+ . the projname directory is structured as followed:
+  . config
+  . extrinsic
+  . intrinsic
+  . calib/{000000, 000001, ...}.jpg
+  . scan/{000000, 000001, ...}.jpg
+  . cloud.asc
+  . cloud.vrml
+
+ . the resulting cloud can then be processed using a cloud edition program,
+  for instance meshlab.
+
+ . not that some calibration files can be shared across projects
