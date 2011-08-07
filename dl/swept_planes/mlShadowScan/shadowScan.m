@@ -40,11 +40,11 @@ disp('Loading object and reconstruction parameters...');
 
 % Select which reconstruction script to use.
 %addpath('./data/demo/');      demo_v1;
-%addpath('./data/man/');      man_v1;
+addpath('./data/man/');      man_v1;
 %addpath('./data/man/');      man_v2;
 %addpath('./data/frog/');     frog_v1;
 %addpath('./data/frog/');     frog_v2;
-addpath('./data/chiquita/'); chiquita_v1;
+%addpath('./data/chiquita/'); chiquita_v1;
 %addpath('./data/chiquita/'); chiquita_v2;
 %addpath('./data/schooner/'); schooner_v1;
 %addpath('./data/urn/');      urn_v1;
@@ -337,8 +337,11 @@ writeVRML(['./models/',objName,'_',seqName,'.wrl'],...
    vertices(clip,[2 1 3]),...
    colors(clip,:));
 disp(' ');
-else % write ascii
+end % write vrml
+if 1 % write ascii
 disp('   + exporting ASCII file...');
-writeVRML(['./models/',objName,'_',seqName,'.asc'], vertices(clip,[1 2 3]));
+fid = fopen(['./models/',objName,'_',seqName,'.asc'], 'w');
+fprintf(fid, "%f %f %f\n", vertices(clip,[2 1 3])');
+fclose(fid);
 disp(' ');
-end
+end % write ascii
