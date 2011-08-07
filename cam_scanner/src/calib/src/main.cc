@@ -33,11 +33,11 @@ static int create_avi(const std::string& dirname, const std::string& aviname)
   cvReleaseImage(&iplimage);
 
   CvVideoWriter* writer = cvCreateVideoWriter
-    (aviname.c_str(), CV_FOURCC('P','I','M','1'), 1, imsize, true);
+    (aviname.c_str(), CV_FOURCC('P','I','M','1'), 25, imsize, true);
 
   if (writer == NULL) return -1;
 
-  for (unsigned int i = 1; true; ++i)
+  for (unsigned int i = 0; true; ++i)
   {
     imname = make_indexed_name(dirname, i);
     iplimage = cvLoadImage(imname.c_str());
@@ -121,7 +121,7 @@ int main(int ac, char** av)
   readConfiguration("../conf/conf.xml", &params);
   allocate_calib(calib, params);
 
-#if 0
+#if 1
   // camera calibration
   {
     CvCapture* cap = directory_to_capture(av[1]);
@@ -131,6 +131,7 @@ int main(int ac, char** av)
   }
 #endif
 
+#if 0
   // projector and camera calibration
   {
     CvCapture* cap = directory_to_capture(av[1]);
@@ -138,6 +139,7 @@ int main(int ac, char** av)
     runProjectorCalibration(cap, &params, &calib, true);
     cvReleaseCapture(&cap);
   }
+#endif
 
 #if 0
   // extrinsic calibration

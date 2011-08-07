@@ -27,3 +27,6 @@
   for instance meshlab.
 
  . not that some calibration files can be shared across projects
+
+. todo
+ . conf.xml missing nodes (camera width height, chessboard...), take from previous one
