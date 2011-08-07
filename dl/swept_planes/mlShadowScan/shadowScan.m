@@ -40,11 +40,11 @@ disp('Loading object and reconstruction parameters...');
 
 % Select which reconstruction script to use.
 %addpath('./data/demo/');      demo_v1;
-addpath('./data/man/');      man_v1;
+%addpath('./data/man/');      man_v1;
 %addpath('./data/man/');      man_v2;
 %addpath('./data/frog/');     frog_v1;
 %addpath('./data/frog/');     frog_v2;
-%addpath('./data/chiquita/'); chiquita_v1;
+addpath('./data/chiquita/'); chiquita_v1;
 %addpath('./data/chiquita/'); chiquita_v2;
 %addpath('./data/schooner/'); schooner_v1;
 %addpath('./data/urn/');      urn_v1;
@@ -316,11 +316,6 @@ clip = find( (vertices(:,1) >= clipRangeX(1) & vertices(:,1) <= clipRangeX(2)) &
              (vertices(:,2) >= clipRangeY(1) & vertices(:,2) <= clipRangeY(2)) & ...
              (vertices(:,3) >= clipRangeZ(1) & vertices(:,3) <= clipRangeZ(2)) );
 
-% dont clib
-% clip = find( (vertices(:,1) != -42) & ...
-%             (vertices(:,2) != -42) & ...
-%             (vertices(:,3) != -42) );
-
 % Display the recovered 3D point cloud (with per-vertex color).
 % Note: Convert to indexed color map for use with FSCATTER3.
 figure(1); set(gcf,'Name','Reconstruction Results');
@@ -328,16 +323,22 @@ C = reshape(colors,[size(colors,1) 1 size(colors,2)]);
 % matlab
 % [C,cmap] = rgb2ind(C,256);
 % octave
-[C,cmap] = rgb2ind(C);
-hold on;
-   %plot3(vertices(:,1),vertices(:,2),vertices(:,3),'b.','MarkerSize',5);
-   fscatter3(vertices(:,1),vertices(:,2),vertices(:,3),double(C),cmap);
-hold off;
+% [C,cmap] = rgb2ind(C);
+% hold on;
+% plot3(vertices(:,1),vertices(:,2),vertices(:,3),'b.','MarkerSize',5);
+% fscatter3(vertices(:,1),vertices(:,2),vertices(:,3),double(C),cmap);
+% hold off;
 
 % Export colored point cloud as a VRML file.
 % Note: Interchange x and y coordinates for j3DPGP.
+if 0 % write vrml
 disp('   + exporting VRML file...');
 writeVRML(['./models/',objName,'_',seqName,'.wrl'],...
    vertices(clip,[2 1 3]),...
    colors(clip,:));
 disp(' ');
+else % write ascii
+disp('   + exporting ASCII file...');
+writeVRML(['./models/',objName,'_',seqName,'.asc'], vertices(clip,[1 2 3]));
+disp(' ');
+end
