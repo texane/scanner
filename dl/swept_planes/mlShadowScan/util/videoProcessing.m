@@ -18,7 +18,7 @@
 % Display progress.
 disp('   + estimating per-pixel dynamic range and shadow thresholds...');
 
-% Extract the image dimensions.
+% Extract the image dimensions (height, width).
 frameDim = [size(frame,1) size(frame,2)];
 
 % Determine the minimum and maximum values observed in each pixel.
@@ -31,8 +31,10 @@ for i = 1:length(allFrames)
    frame = rgb2gray(frame);
    minValue(frame < minValue) = frame(frame < minValue);
    maxValue(frame > maxValue) = frame(frame > maxValue);
+if 0
    imagesc(minValue,[0 255]); axis image; colormap gray;
    title('Minimum Value Per-pixel'); drawnow;
+end % 0
    waitbar(i/length(allFrames));
 end
 close(h);
@@ -41,7 +43,7 @@ close(h);
 shadowValue = 0.5*(minValue + maxValue);
 figure(1); clf; set(gcf,'Name','Shadow Threshold Per-pixel');
 imagesc(shadowValue,[0 255]); axis image; colormap gray;
-title('Shadow Threshold Per-pixel'); pause(3.0);
+title('Shadow Threshold Per-pixel');
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -52,9 +54,40 @@ disp('   + estimating shadow boundaries...');
 
 % Calculate equations for lower/middle/upper boundaries.
 % Note: These boundaries are useful for clipping the estimated lines.
-lowerLine  = fitLine([0 frameDim(2)]+0.5,frameDim(1)*[1 1]+0.5);
+lowerLine  = fitLine([0 frameDim(2)]+0.5,frameDim(1)*[1 1]-0.5);
 middleLine = fitLine(middlePoints(:,1),middlePoints(:,2));
 upperLine  = fitLine([0 frameDim(2)]+0.5,0.5*[1 1]);
+
+if 0 % display lines
+figure(1); clf;  set(gcf,'Name','bar');
+imagesc(shadowValue,[0 255]); axis image; colormap gray;
+title('Lines');
+hold on;
+
+w = lowerLine;
+x0 = 0;
+y0 = (w(3) - w(1) * x0) / w(2);
+x1 = frameDim(2) - 1;
+y1 = (w(3) - w(1) * x1) / w(2);
+plot([x0, x1], [y0, y1], 'g');
+
+w = middleLine;
+x0 = 0;
+y0 = (w(3) - w(1) * x0) / w(2);
+x1 = frameDim(2) - 1;
+y1 = (w(3) - w(1) * x1) / w(2);
+plot([x0, x1], [y0, y1], 'r');
+
+w = upperLine;
+x0 = 0;
+y0 = (w(3) - w(1) * x0) / w(2);
+x1 = frameDim(2) - 1;
+y1 = (w(3) - w(1) * x1) / w(2);
+plot([x0, x1], [y0, y1], 'b');
+
+hold off;
+ginput;
+end % display lines
 
 % Estimate the shadow plane(s) for each frame.
 vLineEnter   = zeros(length(recFrames),3); % vertical "entering" shadow
@@ -76,7 +109,7 @@ for i = 1:length(recFrames)
    % Evaluate the "vertical" shadow line.
    vImg = frame(vRows,vCols)-shadowValue(vRows,vCols);
    for j = 2:length(vCols)
-      idx = (vImg(:,j) >= 0) & (vImg(:,j-1) < 0);
+      idx = (vImg(:,j) >= 0) & (vImg(:,j-1) < 0); % idx the value by rows
       vRowPosEnter(idx) = (j-1) + (-vImg(idx,j-1))./(vImg(idx,j)-vImg(idx,j-1))+vCols(1)-1;
       idx = (vImg(:,j) < 0) & (vImg(:,j-1) >= 0);
       vRowPosLeave(idx) = (j-1) + (-vImg(idx,j-1))./(vImg(idx,j)-vImg(idx,j-1))+vCols(1)-1;
@@ -96,6 +129,7 @@ for i = 1:length(recFrames)
    hLineLeave(i,:) = fitLine(hRowPosLeave,hRows);
    
    % Display the shadow lines.
+if 0
    imagesc(frame,[0 255]); axis image; colormap gray;
    title('Shadow Boundaries'); drawnow;
    hold on;
@@ -105,19 +139,22 @@ for i = 1:length(recFrames)
       plot(hRowPosLeave,hRows,'g.');
    hold off;
    hold on;
-      p1 = intersectLines(vLineEnter(i,:),middleLine);
-      p2 = intersectLines(vLineEnter(i,:),upperLine);
-      plot([p1(1) p2(1)],[p1(2) p2(2)],'b');
-      p1 = intersectLines(vLineLeave(i,:),middleLine);
-      p2 = intersectLines(vLineLeave(i,:),upperLine);
-      plot([p1(1) p2(1)],[p1(2) p2(2)],'g');
-      p1 = intersectLines(hLineEnter(i,:),lowerLine);
-      p2 = intersectLines(hLineEnter(i,:),middleLine);
-      plot([p1(1) p2(1)],[p1(2) p2(2)],'b');
-      p1 = intersectLines(hLineLeave(i,:),lowerLine);
-      p2 = intersectLines(hLineLeave(i,:),middleLine);
-      plot([p1(1) p2(1)],[p1(2) p2(2)],'g');
+     p1 = intersectLines(vLineEnter(i,:),middleLine);
+     p2 = intersectLines(vLineEnter(i,:),upperLine);
+     plot([p1(1) p2(1)],[p1(2) p2(2)],'b');
+     p1 = intersectLines(vLineLeave(i,:),middleLine);
+     p2 = intersectLines(vLineLeave(i,:),upperLine);
+     plot([p1(1) p2(1)],[p1(2) p2(2)],'g');
+     p1 = intersectLines(hLineEnter(i,:),lowerLine);
+     p2 = intersectLines(hLineEnter(i,:),middleLine);
+     plot([p1(1) p2(1)],[p1(2) p2(2)],'b');
+     p1 = intersectLines(hLineLeave(i,:),lowerLine);
+     p2 = intersectLines(hLineLeave(i,:),middleLine);
+     plot([p1(1) p2(1)],[p1(2) p2(2)],'g');
    hold off;
+   ginput ;
+end % display shadow lines
+
    waitbar(i/length(recFrames));
 end
 close(h);
@@ -159,6 +196,7 @@ imagesc(shadowLeave); axis image; colormap(jet(2^8)); %colorbar;
 title('Shadow Time (Second Crossing)'); pause(3.0);
 
 
+if 0 % visualize results
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Part 4: Visualize video processing results (i.e., shadow detection).
 
@@ -188,15 +226,22 @@ for i = 1:5:length(recFrames)
       p1 = intersectLines(vLineEnter(i,:),middleLine);
       p2 = intersectLines(vLineEnter(i,:),upperLine);
       plot([p1(1) p2(1)],[p1(2) p2(2)],'b');
-      p1 = intersectLines(vLineLeave(i,:),middleLine);
-      p2 = intersectLines(vLineLeave(i,:),upperLine);
-      plot([p1(1) p2(1)],[p1(2) p2(2)],'g');
-      p1 = intersectLines(hLineEnter(i,:),lowerLine);
-      p2 = intersectLines(hLineEnter(i,:),middleLine);
-      plot([p1(1) p2(1)],[p1(2) p2(2)],'b');
-      p1 = intersectLines(hLineLeave(i,:),lowerLine);
-      p2 = intersectLines(hLineLeave(i,:),middleLine);
-      plot([p1(1) p2(1)],[p1(2) p2(2)],'g');
+
+if 0 % debug
+   p1 = intersectLines(vLineLeave(i,:),middleLine);
+   p2 = intersectLines(vLineLeave(i,:),upperLine);
+   plot([p1(1) p2(1)],[p1(2) p2(2)],'g');
+   p1 = intersectLines(hLineEnter(i,:),lowerLine);
+   p2 = intersectLines(hLineEnter(i,:),middleLine);
+   plot([p1(1) p2(1)],[p1(2) p2(2)],'b');
+   p1 = intersectLines(hLineLeave(i,:),lowerLine);
+   p2 = intersectLines(hLineLeave(i,:),middleLine);
+   plot([p1(1) p2(1)],[p1(2) p2(2)],'g');
    hold off;
    drawnow;
+   ginput;
+end % debug
+
+end % visualize results
+
 end

@@ -73,7 +73,7 @@ title('Dividing Line Selection');
 xlabel('click on two points on the dividing line');
 % octave
 [x, y] = ginput;
-middlePoints = [ x' ; y' ];
+middlePoints = [x'; y']';
 % matlab
 % middlePoints = ginput(2);
 
@@ -87,13 +87,11 @@ title('Reference Area for "Vertical" Plane');
 xlabel('click on the top-left and bottom-right corners of reference area');
 % octave
 [x, y] = ginput;
-x = [ x' ; y' ];
-vRows = round(min(x(:,1))):round(max(x(:,1)));
-vCols = round(min(x(:,2))):round(max(x(:,2)));
+x = [ x' ; y' ]';
 % matlab
 % x = ginput(2);
-% vRows = round(min(x(:,2))):round(max(x(:,2)));
-% vCols = round(min(x(:,1))):round(max(x(:,1)));
+vRows = round(min(x(:,2))):round(max(x(:,2)));
+vCols = round(min(x(:,1))):round(max(x(:,1)));
 
 % Get bounding box for estimated "horizontal" shadow boundary.
 disp('   + define the reference area for the "horizontal" plane...');
@@ -104,13 +102,11 @@ title('Reference Area for "Horizontal" Plane');
 xlabel('click on the top-left and bottom-right corners of reference area');
 % octave
 [x, y] = ginput;
-x = [ x' ; y' ];
-hRows = round(min(x(:,1))):round(max(x(:,1)));
-hCols = round(min(x(:,2))):round(max(x(:,2)));
+x = [ x' ; y' ]';
 % matlab
 % x = ginput(2);
-% hRows = round(min(x(:,2))):round(max(x(:,2)));
-% hCols = round(min(x(:,1))):round(max(x(:,1)));
+hRows = round(min(x(:,2))):round(max(x(:,2)));
+hCols = round(min(x(:,1))):round(max(x(:,1)));
 
 % Perform necessary video processing.
 videoProcessing;
@@ -292,28 +288,28 @@ disp('Display reconstruction results and exporting VRML file...');
 % Display the 3D configuraton using the extrinsic calibration.
 % Note: Some of this is hard-coded for the configuration included
 %       with the assignment. This could be generalized.
-disp('   + displaying reconstruction results...');
-figure(1); set(gcf,'Name','Reconstruction Results'); clf;
-X = [0 dX dX 0; 0 0 dY dY; 0 0 0 0];
-patch(X(1,:),X(2,:),X(3,:),0.65*[1 1 1],'FaceAlpha',0.5);
-hold on;
-   % plots the "horizontal" plane
-   plot3(X(1,:),X(2,:),X(3,:),'g.','MarkerSize',15); 
-hold off;
-X = Rc_h'*(Rc_v*X + repmat(Tc_v-Tc_h,1,size(X,2)));
-patch(X(1,:),X(2,:),X(3,:),0.65*[1 1 1],'FaceAlpha',0.5);
-hold on;
-   % plots the "vertical" plane
-   plot3(X(1,:),X(2,:),X(3,:),'r.','MarkerSize',15);
-hold off;
-C = -Rc_h'*Tc_h;
-hold on;
-   % plots the camera center
-   plot3(C(1),C(2),C(3),'b.','MarkerSize',20);
-hold off;
-axis equal tight; grid on; view(3); box on;
-axis([-200 800 -1300 500 -100 1000]);
-xlabel('x'); ylabel('y'); zlabel('z');
+% disp('   + displaying reconstruction results...');
+% figure(1); set(gcf,'Name','Reconstruction Results'); clf;
+% X = [0 dX dX 0; 0 0 dY dY; 0 0 0 0];
+% patch(X(1,:),X(2,:),X(3,:),0.65*[1 1 1],'FaceAlpha',0.5);
+% hold on;
+% plots the "horizontal" plane
+% plot3(X(1,:),X(2,:),X(3,:),'g.','MarkerSize',15); 
+% hold off;
+% X = Rc_h'*(Rc_v*X + repmat(Tc_v-Tc_h,1,size(X,2)));
+% patch(X(1,:),X(2,:),X(3,:),0.65*[1 1 1],'FaceAlpha',0.5);
+% hold on;
+% plots the "vertical" plane
+% plot3(X(1,:),X(2,:),X(3,:),'r.','MarkerSize',15);
+% hold off;
+% C = -Rc_h'*Tc_h;
+% hold on;
+% plots the camera center
+% plot3(C(1),C(2),C(3),'b.','MarkerSize',20);
+% hold off;
+% axis equal tight; grid on; view(3); box on;
+% axis([-200 800 -1300 500 -100 1000]);
+% xlabel('x'); ylabel('y'); zlabel('z');
 
 % Clip the recovered 3D point cloud using the bounding volume.
 clip = find( (vertices(:,1) >= clipRangeX(1) & vertices(:,1) <= clipRangeX(2)) & ...
