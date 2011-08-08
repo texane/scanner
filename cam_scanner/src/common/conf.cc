@@ -38,16 +38,14 @@ int load_conf(conf_t& conf, const std::string& confname)
   s = cvReadStringByName(fs, m, "frames_dirname", NULL);
   if (s == NULL) goto on_error;
   conf.calib_frames_dirname = s;
-  // TODO
-#if 0
-  <camera_chessboard>
-    <interior_horizontal_corners>8</interior_horizontal_corners>
-    <interior_vertical_corners>6</interior_vertical_corners>
-    <square_width_mm>30.0</square_width_mm>
-    <square_height_mm>30.0</square_height_mm>
-  </camera_chessboard>
-#endif
-  // TODO
+  conf.chess_square_hcount = cvReadIntByName(fs, m, "chess_square_hcount", -1);
+  if (conf.chess_square_hcount == -1) goto on_error;
+  conf.chess_square_vcount = cvReadIntByName(fs, m, "chess_square_vcount", -1);
+  if (conf.chess_square_vcount == -1) goto on_error;
+  conf.chess_square_width = cvReadIntByName(fs, m, "chess_square_width", -1);
+  if (conf.chess_square_width == -1) goto on_error;
+  conf.chess_square_height = cvReadIntByName(fs, m, "chess_square_vcount", -1);
+  if (conf.chess_square_height == -1) goto on_error;
 
   m = cvGetFileNodeByName(fs, 0, "scan");
   if (m == NULL) goto on_error;
@@ -82,6 +80,10 @@ int store_conf(const conf_t& conf, const std::string& confname)
 
   cvStartWriteStruct(fs, "calib", CV_NODE_MAP);
   cvWriteString(fs, "frames_dirname", conf.calib_frames_dirname.c_str(), 1);
+  cvWriteInt(fs, "chess_square_hcount", conf.chess_square_hcount);
+  cvWriteInt(fs, "chess_square_vcount", conf.chess_square_vcount);
+  cvWriteInt(fs, "chess_square_height", conf.chess_square_height);
+  cvWriteInt(fs, "chess_square_width", conf.chess_square_width);
   cvEndWriteStruct(fs);
 
   cvStartWriteStruct(fs, "scan", CV_NODE_MAP);

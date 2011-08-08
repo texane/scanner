@@ -18,7 +18,7 @@ typedef struct conf
   int chess_square_width; // in mm
   int chess_square_height;
 
-  // scan
+  // scanning
   std::string scan_frames_dirname;
 
   // camera
