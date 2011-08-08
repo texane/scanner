@@ -25,13 +25,29 @@ int load_conf(conf_t& conf, const std::string& confname)
   m = cvGetFileNodeByName(fs, 0, "camera");
   if (m == NULL) goto on_error;
   conf.cam_index = cvReadIntByName(fs, m, "index", -1);
-  if (conf.cam_index == (unsigned int)-1) goto on_error;
+  if (conf.cam_index == -1) goto on_error;
+  conf.cam_width = cvReadIntByName(fs, m, "width", -1);
+  if (conf.cam_width == -1) goto on_error;
+  conf.cam_height = cvReadIntByName(fs, m, "height", -1);
+  if (conf.cam_height == -1) goto on_error;
+  conf.cam_height = cvReadIntByName(fs, m, "gain", -1);
+  if (conf.cam_gain == -1) goto on_error;
 
   m = cvGetFileNodeByName(fs, 0, "calib");
   if (m == NULL) goto on_error;
   s = cvReadStringByName(fs, m, "frames_dirname", NULL);
   if (s == NULL) goto on_error;
   conf.calib_frames_dirname = s;
+  // TODO
+#if 0
+  <camera_chessboard>
+    <interior_horizontal_corners>8</interior_horizontal_corners>
+    <interior_vertical_corners>6</interior_vertical_corners>
+    <square_width_mm>30.0</square_width_mm>
+    <square_height_mm>30.0</square_height_mm>
+  </camera_chessboard>
+#endif
+  // TODO
 
   m = cvGetFileNodeByName(fs, 0, "scan");
   if (m == NULL) goto on_error;
@@ -59,6 +75,9 @@ int store_conf(const conf_t& conf, const std::string& confname)
 
   cvStartWriteStruct(fs, "camera", CV_NODE_MAP);
   cvWriteInt(fs, "index", conf.cam_index);
+  cvWriteInt(fs, "width", conf.cam_width);
+  cvWriteInt(fs, "height", conf.cam_height);
+  cvWriteInt(fs, "gain", conf.cam_gain);
   cvEndWriteStruct(fs);
 
   cvStartWriteStruct(fs, "calib", CV_NODE_MAP);
