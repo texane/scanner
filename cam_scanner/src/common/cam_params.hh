@@ -51,6 +51,7 @@ typedef struct cam_params
 
 
 int cam_params_load(cam_params_t&, const std::string&);
+int cam_params_load_ml(cam_params_t&, const std::string&, bool = true);
 int cam_params_save(const cam_params_t&, const std::string&);
 int cam_params_create(cam_params_t&);
 int cam_params_release(cam_params_t&);

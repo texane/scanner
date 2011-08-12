@@ -49,6 +49,106 @@ int cam_params_load(cam_params_t& params, const std::string& filename)
 }
 
 
+#if 0 // unused
+static void cam_params_get_fc(real_type* fc, const cam_params_t& params)
+{
+  // get the focal length fx, fy from the intrinsic matrix
+  fc[0] = CV_MAT_ELEM(*params.intrinsic, real_type, 0, 0);
+  fc[1] = CV_MAT_ELEM(*params.intrinsic, real_type, 1, 1);
+}
+#endif // unused
+
+int cam_params_load_ml
+(cam_params_t& params, const std::string& filename, bool is_lowres)
+{
+  // load params from old matlab version (mlShadowScan)
+  // this is hardcoded for dat/man both resolutions. since
+  // mlShadowScan does not save extrinsic parameters. on the
+  // long term, this function should not be avail.
+
+  int error;
+
+  error = cam_params_create(params);
+  ASSERT_RETURN(error == 0, -1);
+
+  real_type fc[2];
+  real_type cc[2];
+  real_type kc[5];
+  real_type r[3];
+  real_type t[3];
+
+  if (is_lowres == true)
+  {
+    // from mlShadowScan/data/calib-lr/Calib_Results.m
+
+    fc[0] = 1029.088963049301100;
+    fc[1] = 1028.772845684173700;
+    cc[0] = 287.368565122283710;
+    cc[1] = 204.931308136716550;
+    kc[0] = -0.148348422140938;
+    kc[1] = 0.215129139753359;
+    kc[2] = 0.004513111567607;
+    kc[3] = 0.004877209469556;
+    kc[4] = 0;
+    r[0] =  2.0345345;
+    r[1] = -0.0089891;
+    r[2] = -0.0217502;
+    t[0] = -326.24;
+    t[1] = 222.80;
+    t[2] = 1554.56;
+  }
+  else
+  {
+    // from mlShadowScan/data/calib/Calib_Results.m
+
+    fc[0] = 2063.624094669945900;
+    fc[1] = 2068.246294767563500;
+    cc[0] = 564.284599933070470;
+    cc[1] = 430.077119141454150;
+    kc[0] = -0.189857971274649;
+    kc[1] = 1.159545847481371;
+    kc[2] = 0.006814823434558;
+    kc[3] = 0.003184022300329;
+    kc[4] = 0;
+    r[0] =  2.0472535;
+    r[1] = -0.0044281;
+    r[2] = -0.0208858;
+    t[0] = -317.12;
+    t[1] = 207.65;
+    t[2] = 1560.28;
+  }
+
+  // refer to byo3d.pdf,p.21 for intrinsic matrix information
+  // refer to opencv doc on cvCalibrateCamera2
+  CV_MAT_ELEM(*params.intrinsic, real_type, 0, 0) = fc[0];
+  CV_MAT_ELEM(*params.intrinsic, real_type, 0, 1) = 0;
+  CV_MAT_ELEM(*params.intrinsic, real_type, 0, 2) = cc[0];
+  CV_MAT_ELEM(*params.intrinsic, real_type, 1, 0) = 0;
+  CV_MAT_ELEM(*params.intrinsic, real_type, 1, 1) = fc[1];
+  CV_MAT_ELEM(*params.intrinsic, real_type, 1, 2) = cc[1];
+  CV_MAT_ELEM(*params.intrinsic, real_type, 2, 0) = 0;
+  CV_MAT_ELEM(*params.intrinsic, real_type, 2, 1) = 0;
+  CV_MAT_ELEM(*params.intrinsic, real_type, 2, 2) = 1;
+
+  // distortion
+  CV_MAT_ELEM(*params.distortion, real_type, 0, 0) = kc[0];
+  CV_MAT_ELEM(*params.distortion, real_type, 1, 0) = kc[1];
+  CV_MAT_ELEM(*params.distortion, real_type, 2, 0) = kc[2];
+  CV_MAT_ELEM(*params.distortion, real_type, 3, 0) = kc[3];
+  CV_MAT_ELEM(*params.distortion, real_type, 4, 0) = kc[4];
+
+  // extrinsic refer to opencv cvFindExtrinsicCameraParams2
+  // and cvStructuredLight/cvCalibrateProCam.cpp
+  for (unsigned int i = 0; i < 3; ++i)
+  {
+    CV_MAT_ELEM(*params.extrinsic, real_type, 0, i) = r[i];
+    CV_MAT_ELEM(*params.extrinsic, real_type, 1, i) = t[i];
+  }
+
+  return 0;
+}
+
+
 int cam_params_save(const cam_params_t& params, const std::string& filename)
 {
   CvFileStorage* fs = cvOpenFileStorage(filename.c_str(), 0, CV_STORAGE_WRITE);
@@ -69,8 +169,8 @@ int cam_params_save(const cam_params_t& params, const std::string& filename)
 int cam_params_create(cam_params_t& params)
 {
   params.intrinsic = cvCreateMat(3, 3, mat_type);
-  params.distortion = cvCreateMat(3, 3, mat_type);
-  params.extrinsic = cvCreateMat(3, 3, mat_type);
+  params.distortion = cvCreateMat(5, 1, mat_type);
+  params.extrinsic = cvCreateMat(2, 3, mat_type);
 
   ASSERT_RETURN(params.intrinsic != NULL, -1);
   ASSERT_RETURN(params.distortion != NULL, -1);
@@ -109,16 +209,28 @@ __attribute__((unused)) static int do_write(void)
   ASSERT_RETURN(error == 0, -1);
 
   CvMat* mat = params.intrinsic;
+  unsigned int rows = 3;
+  unsigned int cols = 3;
 
  redo_fill:
-  for (unsigned int i = 0; i < 3; ++i)
-    for (unsigned int j = 0; j < 3; ++j)
+  for (unsigned int i = 0; i < rows; ++i)
+    for (unsigned int j = 0; j < cols; ++j)
       CV_MAT_ELEM(*mat, real_type, i, j) = 42;
 
   if (mat != params.extrinsic)
   {
-    if (mat == params.intrinsic) mat = params.distortion;
-    else if (mat == params.distortion) mat = params.extrinsic;
+    if (mat == params.intrinsic)
+    {
+      rows = 5;
+      cols = 1;
+      mat = params.distortion;
+    }
+    else if (mat == params.distortion)
+    {
+      rows = 2;
+      cols = 3;
+      mat = params.extrinsic;
+    }
     goto redo_fill;
   }
 
@@ -139,10 +251,12 @@ __attribute__((unused)) static int do_read(void)
   ASSERT_RETURN(error == 0, -1);
 
   CvMat* mat = params.intrinsic;
+  unsigned int rows = 3;
+  unsigned int cols = 3;
 
  redo_read:
-  for (unsigned int i = 0; i < 3; ++i)
-    for (unsigned int j = 0; j < 3; ++j)
+  for (unsigned int i = 0; i < rows; ++i)
+    for (unsigned int j = 0; j < cols; ++j)
       if (CV_MAT_ELEM(*mat, real_type, i, j) != 42)
       {
 	printf("invalid\n");
@@ -153,8 +267,18 @@ __attribute__((unused)) static int do_read(void)
 
   if (mat != params.extrinsic)
   {
-    if (mat == params.intrinsic) mat = params.distortion;
-    else if (mat == params.distortion) mat = params.extrinsic;
+    if (mat == params.intrinsic)
+    {
+      rows = 5;
+      cols = 1;
+      mat = params.distortion;
+    }
+    else if (mat == params.distortion)
+    {
+      rows = 2;
+      cols = 3;
+      mat = params.extrinsic;
+    }
     goto redo_read;
   }
 

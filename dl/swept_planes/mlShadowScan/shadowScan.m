@@ -138,7 +138,6 @@ firstFrame = ['./data/',objName,'/',seqName,'/000001'];
    computeExtrinsic(fc,cc,kc,alpha_c,firstFrame,'jpg',nX,nY,dX,dY);
 pause(1.5);
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Part 4: Reconstruction
 
