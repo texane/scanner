@@ -90,16 +90,11 @@ int cam_params_release(cam_params_t& params)
   cvReleaseMat(&params.distortion);
   cvReleaseMat(&params.extrinsic);
 
-  // fixme: is it done by cvReleaseMat
-  params.intrinsic = NULL;
-  params.distortion = NULL;
-  params.extrinsic = NULL;
-
   return 0;
 }
 
 
-#if 1 // UNIT
+#if 0 // UNIT
 
 #include <stdio.h>
 
