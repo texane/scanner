@@ -33,5 +33,17 @@ typedef struct conf
 int load_conf(conf_t&, const std::string&);
 int store_conf(const conf_t&, const std::string&);
 
+// fixme
+static inline int conf_load(conf_t& conf, const std::string& filename)
+{
+  return load_conf(conf, filename);
+}
+
+// fixme
+static inline int conf_save(const conf_t& conf, const std::string& filename)
+{
+  return store_conf(conf, filename);
+}
+
 
 #endif // ! COMMON_CONF_HH_INCLUDED

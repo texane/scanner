@@ -1,5 +1,5 @@
-#ifndef CAM_PARAMS_HH_INCLUDED
-# define CAM_PARAMS_HH_INCLUDED
+#ifndef COMMON_CAM_PARAMS_HH_INCLUDED
+# define COMMON_CAM_PARAMS_HH_INCLUDED
 
 
 #include <string>
@@ -57,4 +57,4 @@ int cam_params_create(cam_params_t&);
 int cam_params_release(cam_params_t&);
 
 
-#endif // ! CAM_PARAMS_HH_INCLUDED
+#endif // ! COMMON_CAM_PARAMS_HH_INCLUDED

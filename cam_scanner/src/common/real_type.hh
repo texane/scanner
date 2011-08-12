@@ -1,5 +1,5 @@
-#ifndef REAL_TYPE_HH_INCLUDED
-# define REAL_TYPE_HH_INCLUDED
+#ifndef COMMON_REAL_TYPE_HH_INCLUDED
+# define COMMON_REAL_TYPE_HH_INCLUDED
 
 #ifndef REAL_TYPE_IS_DOUBLE
 # define REAL_TYPE_IS_DOUBLE 1
@@ -11,4 +11,4 @@ typedef double real_type;
 typedef float real_type;
 #endif
 
-#endif // ! REAL_TYPE_HH_INCLUDED
+#endif // ! COMMON_REAL_TYPE_HH_INCLUDED
