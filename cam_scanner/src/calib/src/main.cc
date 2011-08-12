@@ -112,7 +112,7 @@ static int allocate_calib(slCalib& sl_calib, const slParams& sl_params)
   cvSet(sl_calib.background_mask, cvScalar(255));
 
   return 0;
-} 
+}
 
 int main(int ac, char** av)
 {

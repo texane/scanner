@@ -36,6 +36,7 @@ int main(int ac, char** av)
     return -1;
   }
 
+  // calibration
   conf.calib_frames_dirname = "calib_frames";
   subname = dirname + "/" + conf.calib_frames_dirname.c_str();
   if (do_mkdir(subname.c_str()) == -1) return -1;
@@ -44,6 +45,7 @@ int main(int ac, char** av)
   conf.chess_square_width = 30;
   conf.chess_square_height = 30;
 
+  // scan
   conf.scan_frames_dirname = "scan_frames";
   subname = dirname + "/" + conf.scan_frames_dirname.c_str();
   if (do_mkdir(subname.c_str()) == -1) return -1;

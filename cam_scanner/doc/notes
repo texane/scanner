@@ -15,18 +15,65 @@
   . scan projname
 
  . the projname directory is structured as followed:
-  . config
-  . extrinsic
-  . intrinsic
-  . calib/{000000, 000001, ...}.jpg
-  . scan/{000000, 000001, ...}.jpg
-  . cloud.asc
-  . cloud.vrml
+  . conf.xml
+   . <cam_file>
+   . <calib_frames>
+   . <scans>
+    . <scan>
+     . <id>
+     . <angle>
+     . <data_file>
+  . cam.xml
+   . <params>
+    . index
+    . width
+    . height
+   . <calib>
+    . <intrinsic>
+     . focal length, fc
+     . principal point, cc
+     . skew coeff, alpha_c
+     . distortion coeff, kc
+     . focal length uncertainty, fc_error
+     . principal point uncertainty, cc_error
+     . skew uncertainty, alpha_c_error
+     . distortion uncertainty, kc_error
+     . image size, nx, ny
+     . ignored, n_ima, est_fc, est_aspect_ratio, center_optim, est_alpha, est_dist
+
+    . <extrinsic>
+     . rotation vector, omc_kk
+     . translation vector, tc_kk
+
+  . calib_frames/{000000, 000001, ...}.jpg
+  . scan_frames/{000000, 000001, ...}.jpg
 
  . the resulting cloud can then be processed using a cloud edition program,
   for instance meshlab.
 
- . not that some calibration files can be shared across projects
+ . note that some calibration files can be shared across projects
+
+. intrinsic
+ . fc, cc, kc, alpha_c, nx, ny
+. extrinsic
+ . tc_{h,v}, rc_{h,v}, h_{h,v}
+ . where h (resp. v) stands for the horizontal (resp vertical) plane
+
+. scanning theory of operation
+ . retrieve scene information
+  . get 2 points on the middle line
+  . get bounding box for the vertical and horizontal shadow boundaries
+ . derive extrinsic params
+  . load camera intrinsic params, from calibration procedure
+  . derive extrinsic params for horizontal and vertical frame using first frame
+ . determine the implicit representation of shadow planes
+  . estimate params of the reference planes using least square
+  . determine the per frame shadow plane params
+ . reconstruction
+  . cast a ray per pixel and intersect with the shadow plane
+ . output points
 
 . todo
- . conf.xml missing nodes (camera width height, chessboard...), take from previous one
+ . how to calibration
+  -> read from matlab file
+  -> get from opencv + slcalib
