@@ -80,6 +80,9 @@ int cam_params_load_ml
   if (is_lowres == true)
   {
     // from mlShadowScan/data/calib-lr/Calib_Results.m
+    // note: rotation and translation vectors were found
+    // by printing omc_ext and Tc_ext in computeExtrinsic.m
+
 
     fc[0] = 1029.088963049301100;
     fc[1] = 1028.772845684173700;
