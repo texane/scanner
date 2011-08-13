@@ -309,7 +309,6 @@ static int intersect_line_plane
 
 #if 0 // fitting routines
 
-static void fit_line(void);
 static void fit_plane(void);
 
 #endif // fitting routines
@@ -471,7 +470,6 @@ static void get_shadow_points
  std::list<CvPoint> points[2]
 )
 {
-
   // get the entering and leaving shaded points (resp. points[0] and points[1])
   // in the bounding box defined by {first,last}_{row,col}. see comments for the
   // definition of entering and leaving points.
@@ -499,6 +497,7 @@ static void get_shadow_points
       if (rneigh_val >= rthr_val) points[1].push_back(point);
     }
 }
+
 
 static int fit_line(const std::list<CvPoint>& points, real_type w[3])
 {
@@ -546,6 +545,8 @@ static int fit_line(const std::list<CvPoint>& points, real_type w[3])
 
   const real_type a = CV_MAT_ELEM(*res, real_type, 0, 0);
   const real_type b = CV_MAT_ELEM(*res, real_type, 1, 0);
+
+  // printf("y = %lf * x + %lf\n", a, b);
 
   w[0] = a * -1;
   w[1] = 1;
@@ -629,6 +630,58 @@ __attribute__((unused))static int draw_implicit_line
   return 0;
 }
 
+__attribute__((unused))
+static void draw_middle_line(IplImage* image, const CvPoint points[2])
+{
+  std::list<CvPoint> point_list;
+  point_list.push_back(points[0]);
+  point_list.push_back(points[1]);
+
+  real_type w[3];
+  fit_line(point_list, w);
+
+  draw_implicit_line(image, w, CV_RGB(0x00, 0x00, 0x00));
+}
+
+__attribute__((unused)) static int check_shadow_lines
+(const CvPoint middle_points[2], const real_type w[4][3])
+{
+  // entering (resp. leaving) lines should intersect on the middle line
+  // w the lines implicit form coefficients
+
+  // solve intersection
+
+  const real_type a0 = -w[0][0] / w[0][1];
+  const real_type b0 =  w[0][2] / w[0][1];
+
+  const real_type a1 = -w[2][0] / w[2][1];
+  const real_type b1 =  w[2][2] / w[2][1];
+
+  const real_type x = (b0 - b1) / (a0 - a1) * -1;
+  const real_type y = a0 * x + b0;
+
+  // fit middle line
+
+  std::list<CvPoint> point_list;
+  point_list.push_back(middle_points[0]);
+  point_list.push_back(middle_points[1]);
+
+  real_type wm[3];
+  fit_line(point_list, wm);
+
+  const real_type am = -wm[0] / wm[1];
+  const real_type bm =  wm[2] / wm[1];
+
+  const real_type xm = x;
+  const real_type ym = am * xm + bm;
+
+  // compute point distance
+
+  const real_type d = sqrt(pow(xm - x, 2) + pow(ym - y, 2));
+
+  return d >= 10 ? -1 : 0;
+}
+
 static int estimate_shadow_planes
 (CvCapture* cap, const CvMat* thr_mat, const user_points_t& user_points)
 {
@@ -660,11 +713,14 @@ static int estimate_shadow_planes
   hbox.height = (user_points.hplane[1].y - 1) - hbox.y;
 
   // toremove
-  seek_capture(cap, 60);
+  unsigned int frame_index = 86;
+  seek_capture(cap, frame_index);
   // rewind_capture(cap);
 
   while (1)
   {
+    printf("frame_index == %u\n", frame_index++);
+
     IplImage* const frame_image = cvQueryFrame(cap);
     if (frame_image == NULL) break ;
 
@@ -711,6 +767,12 @@ static int estimate_shadow_planes
       {
 	draw_points(cloned_image, shadow_points[i], colors[i]);
 	draw_implicit_line(cloned_image, shadow_lineqs[i], colors[i]);
+      }
+
+      if (check_shadow_lines(user_points.mline, shadow_lineqs) == -1)
+      {
+	printf("invalid shadow lines\n");
+	draw_middle_line(cloned_image, user_points.mline);
       }
 
       show_image(cloned_image, "ShadowLines");
