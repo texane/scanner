@@ -359,7 +359,7 @@ static void print_user_points(user_points_t& points)
 }
 
 __attribute__((unused))
-static void get_static_user_points(user_points_t& points)
+static int get_static_user_points(user_points_t& points)
 {
   // got from a previous run, lowres image
 
@@ -395,6 +395,8 @@ static void get_static_user_points(user_points_t& points)
   points.hcorner[2].y = 249;
   points.hcorner[3].x = 106;
   points.hcorner[3].y = 254;
+
+  return 0;
 }
 
 typedef struct on_mouse_state
@@ -451,6 +453,7 @@ static void on_mouse(int event, int x, int y, int flags, void* p)
   ++state->id;
 }
 
+__attribute__((unused))
 static int get_user_points(CvCapture* cap, user_points_t& points)
 {
   // get the first frame for reference
@@ -513,7 +516,8 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
 
   // show_matrix(shadow_thresholds);
 
-  error = get_user_points(cap, user_points);
+  // error = get_user_points(cap, user_points);
+  error = get_static_user_points(user_points);
   ASSERT_GOTO(error == 0, on_error);
 
   // print_user_points(user_points);
