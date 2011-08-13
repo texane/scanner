@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <list>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
@@ -499,6 +500,84 @@ static void get_shadow_points
     }
 }
 
+static void fit_line(const std::list<CvPoint>& points, const real_type w[3])
+{
+  // find a line that best fits points. use least square error method.
+  // w contains the resulting line explicit coefficients such that:
+  // w[0] * x + w[1] * y = w[2]
+}
+
+__attribute__((unused))static int draw_implicit_line
+(IplImage* image, const real_type w[3], const CvScalar& color)
+{
+  // draw the line whose implicit form coefficients are in w[3]
+  // x = (w[2] - w[1] * y) / w[0];
+  // y = (w[2] - w[0] * x) / w[1];
+  // to get the form y = ax + b:
+  // a = - w[0] / w[1]
+  // b = + w[2] / w[1]
+
+  CvPoint points[2];
+  unsigned int i = 0;
+
+  ASSERT_RETURN(w[1], -1);
+
+  const real_type a = -w[0] / w[1];
+  const real_type b =  w[2] / w[1];
+
+  // 0 <= b < image->height, left intersection
+  if ((b >= 0) && (b < image->height))
+  {
+    ASSERT_RETURN(i < 2, -1);
+    points[i].x = 0;
+    points[i].y = (int)b;
+    ++i;
+  }
+
+  // 0 <= -b / a < image->width, top intersection
+  if (fabs(a) > 0.0001)
+  {
+    const real_type fu = -b / a;
+    if ((fu >= 0) && (fu < image->width))
+    {
+      ASSERT_RETURN(i < 2, -1);
+      points[i].x = floor(fu);
+      points[i].y = 0;
+      ++i;
+    }
+  }
+
+  // 0 <= (width - 1) * a + b < height, right intersection
+  const real_type bar = (image->width - 1) * a + b;
+  if ((bar >= 0) && (bar < image->height))
+  {
+    ASSERT_RETURN(i < 2, -1);
+    points[i].x = image->width - 1;
+    points[i].y = floor(bar);
+    ++i;
+  }
+
+  // 0 <= (height - 1 - b) / a < width, bottom intersection
+  if (fabs(a) > 0.0001)
+  {
+    const real_type baz = (image->height - 1 - b) / a;
+
+    if ((baz >= 0) && (baz < image->width))
+    {
+      ASSERT_RETURN(i < 2, -1);
+      points[i].x = floor(baz);
+      points[i].y = image->height - 1;
+      ++i;
+    }
+  }
+
+  ASSERT_RETURN(i == 2, -1);
+
+  cvLine(image, points[0], points[2], color);
+
+  return 0;
+}
+
 static int estimate_shadow_planes
 (CvCapture* cap, const CvMat* thr_mat, const user_points_t& user_points)
 {
@@ -508,8 +587,11 @@ static int estimate_shadow_planes
   IplImage* gray_image = NULL;
   CvMat* gray_mat = NULL;
 
-  // {vertical,horizontal}_{enter,leave}
+  // {vertical,horizontal}_{enter,leave} points
   std::list<CvPoint> shadow_points[4];
+
+  // {vertical,horizontal}_{enter,leave} line equations
+  real_type shadow_lineqs[4][3];
 
   int error = -1;
 
@@ -557,7 +639,7 @@ static int estimate_shadow_planes
     get_shadow_points(gray_mat, thr_mat, vbox, shadow_points + 0);
     get_shadow_points(gray_mat, thr_mat, hbox, shadow_points + 2);
 
-#if 1 // draw the points
+#if 0 // draw the points
     {
       static const CvScalar colors[4] =
       {
@@ -577,6 +659,31 @@ static int estimate_shadow_planes
       cvReleaseImage(&cloned_image);
     }
 #endif // draw the points
+
+    // get lines equation via lse fitting method
+    for (unsigned int i = 0; i < 4; ++i)
+      fit_line(shadow_points[i], shadow_lineqs[i]);
+
+#if 0 // plot the lines
+    {
+      static const CvScalar colors[4] =
+      {
+	CV_RGB(0xff, 0x00, 0x00),
+	CV_RGB(0x00, 0xff, 0x00),
+	CV_RGB(0x00, 0x00, 0xff),
+	CV_RGB(0xff, 0x00, 0xff)
+      };
+
+      IplImage* cloned_image = cvCloneImage(frame_image);
+      ASSERT_GOTO(cloned_image, on_error);
+
+      for (unsigned int i = 0; i < 4; ++i)
+	draw_implicit_line(cloned_image, shadow_lineqs[i], colors[i]);
+
+      show_image(cloned_image, "ShadowLines");
+      cvReleaseImage(&cloned_image);
+    }
+#endif // plot the line
   }
 
   error = 0;
