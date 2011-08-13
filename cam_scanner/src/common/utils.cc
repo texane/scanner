@@ -28,7 +28,7 @@ static int create_avi(const std::string& dirname, const std::string& aviname)
   imname = make_indexed_name(dirname, 1);
 
   IplImage* iplimage = cvLoadImage(imname.c_str());
-  ASSERT_RETURN(iplimage == NULL, -1);
+  ASSERT_RETURN(iplimage != NULL, -1);
 
   CvSize imsize;
   imsize.width = iplimage->width;
@@ -36,7 +36,7 @@ static int create_avi(const std::string& dirname, const std::string& aviname)
   cvReleaseImage(&iplimage);
 
   CvVideoWriter* writer = cvCreateVideoWriter
-    (aviname.c_str(), CV_FOURCC('P','I','M','1'), 1, imsize, true);
+    (aviname.c_str(), CV_FOURCC('P','I','M','1'), 25, imsize, true);
 
   ASSERT_RETURN(writer != NULL, -1);
 
