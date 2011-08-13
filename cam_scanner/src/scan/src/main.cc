@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
@@ -10,10 +11,9 @@
 // show an image or a matrix
 
 __attribute__((unused))
-static void show_image(const IplImage* image)
+static void show_image(const IplImage* image, const char* name)
 {
-  static const char* name = "MatrixView";
-  cvNamedWindow(name, 1);
+  cvNamedWindow(name, 0);
   cvShowImage(name, image);
   cvWaitKey(0);
   cvDestroyWindow(name);
@@ -24,7 +24,7 @@ static void show_matrix(CvMat* mat)
 {
   IplImage header;
   const IplImage* const image = cvGetImage(mat, &header);
-  show_image(image);
+  show_image(image, "MatrixView");
 }
 
 
@@ -316,12 +316,193 @@ static void generate_points
 #endif // TODO
 
 
+// ask user for a set of points
+
+typedef struct user_points
+{
+  // middle line
+  CvPoint mline[2];
+
+  // vertical and horizontal planes
+  CvPoint vplane[2];
+  CvPoint hplane[2];
+
+  // vertical and horizontal corners
+  CvPoint vcorner[4];
+  CvPoint hcorner[4];
+
+} user_points_t;
+
+static void print_point_array(const CvPoint* p, unsigned int n)
+{
+  for (unsigned int i = 0; i < n; ++i, ++p)
+    printf("(%d, %d)\n", p->x, p->y);
+}
+
+__attribute__((unused))
+static void print_user_points(user_points_t& points)
+{
+  printf("middle_points:\n");
+  print_point_array(points.mline, 2);
+
+  printf("vplane_points:\n");
+  print_point_array(points.vplane, 2);
+
+  printf("hplane_points:\n");
+  print_point_array(points.hplane, 2);
+
+  printf("vcorner_points:\n");
+  print_point_array(points.vcorner, 4);
+
+  printf("hcorner_points:\n");
+  print_point_array(points.hcorner, 4);
+}
+
+__attribute__((unused))
+static void get_static_user_points(user_points_t& points)
+{
+  // got from a previous run, lowres image
+
+  points.mline[0].x = 106;
+  points.mline[0].y = 226;
+  points.mline[1].x = 439;
+  points.mline[1].y = 222;
+
+  points.vplane[0].x = 112;
+  points.vplane[0].y = 3;
+  points.vplane[1].x = 400;
+  points.vplane[1].y = 144;
+
+  points.hplane[0].x = 98;
+  points.hplane[0].y = 333;
+  points.hplane[1].x = 425;
+  points.hplane[1].y = 378;
+
+  points.vcorner[0].x = 110;
+  points.vcorner[0].y = 181;
+  points.vcorner[1].x = 417;
+  points.vcorner[1].y = 178;
+  points.vcorner[2].x = 422;
+  points.vcorner[2].y = 15;
+  points.vcorner[3].x = 94;
+  points.vcorner[3].y = 23;
+
+  points.hcorner[0].x = 74;
+  points.hcorner[0].y = 352;
+  points.hcorner[1].x = 442;
+  points.hcorner[1].y = 351;
+  points.hcorner[2].x = 421;
+  points.hcorner[2].y = 249;
+  points.hcorner[3].x = 106;
+  points.hcorner[3].y = 254;
+}
+
+typedef struct on_mouse_state
+{
+  IplImage* image;
+  const char* name;
+  user_points_t* points;
+  unsigned int id;
+} on_mouse_state_t;
+
+static void on_mouse(int event, int x, int y, int flags, void* p)
+{
+  if (event != CV_EVENT_LBUTTONDOWN) return ;
+
+  on_mouse_state_t* const state = (on_mouse_state_t*)p;
+  IplImage* const image = state->image;
+  user_points_t* const points = state->points;
+  CvPoint* point;
+
+  // which point
+  if (state->id < 2)
+  {
+    point = points->mline + state->id;
+  }
+  else if (state->id < 4)
+  {
+    point = points->vplane + state->id - 2;
+  }
+  else if (state->id < 6)
+  {
+    point = points->hplane + state->id - 4;
+  }
+  else if (state->id < 10)
+  {
+    point = points->vcorner + state->id - 6;
+  }
+  else if (state->id < 14)
+  {
+    point = points->hcorner + state->id - 10;
+  }
+  else 
+  {
+    return ;
+  }
+
+  point->x = x;
+  point->y = y;
+
+  // draw the point
+  static const CvScalar color = CV_RGB(0xff, 0x00, 0xff);
+  cvCircle(image, *point, 3, color, 1);
+  cvShowImage(state->name, image);
+
+  ++state->id;
+}
+
+static int get_user_points(CvCapture* cap, user_points_t& points)
+{
+  // get the first frame for reference
+
+  static const char* name = "UserPoints";
+
+  IplImage* frame = NULL;
+  IplImage* cloned_image = NULL;
+  int error = -1;
+  on_mouse_state_t state;
+
+  frame = cvQueryFrame(cap);
+  ASSERT_GOTO(frame, on_error);
+  cloned_image = cvCloneImage(frame);
+  ASSERT_GOTO(cloned_image, on_error);
+
+  cvNamedWindow(name, 0);
+  cvShowImage(name, cloned_image);
+  state.id = 0;
+  state.points = &points;
+  state.image = cloned_image;
+  state.name = name;
+  cvSetMouseCallback(name, on_mouse, &state);
+
+  while (state.id < 14)
+  {
+    const char c = cvWaitKey(0);
+    if (c == 27)
+    {
+      error = -1;
+      goto on_error;
+    }
+  }
+
+  error = 0;
+
+ on_error:
+  if (cloned_image) cvReleaseImage(&cloned_image);
+  cvDestroyWindow(name);
+  rewind_capture(cap);
+
+  return error;
+}
+
+
 // scan main routine
 
 static int do_scan(CvCapture* cap, const cam_params_t& params)
 {
   CvMat* shadow_thresholds = NULL;
   CvSize frame_size;
+  user_points_t user_points;
   int error = -1;
 
   frame_size = get_capture_frame_size(cap);
@@ -331,6 +512,11 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   ASSERT_GOTO(error == 0, on_error);
 
   // show_matrix(shadow_thresholds);
+
+  error = get_user_points(cap, user_points);
+  ASSERT_GOTO(error == 0, on_error);
+
+  // print_user_points(user_points);
 
 #if 0
   error = estimate_shadow_planes(cap, shadow_planes);
