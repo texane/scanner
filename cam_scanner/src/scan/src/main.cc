@@ -378,6 +378,8 @@ static int estimate_shadow_thresholds(CvCapture* cap, CvMat*& thresholds)
   CvMat* minvals = NULL;
   CvMat* maxvals = NULL;
 
+  CvMat header;
+
   // fixme
   rewind_capture(cap);
   const CvSize frame_size = get_capture_frame_size(cap);
@@ -410,7 +412,6 @@ static int estimate_shadow_thresholds(CvCapture* cap, CvMat*& thresholds)
     // create if does not yet exist
     if (gray_image == NULL)
     {
-      CvMat header;
       gray_image = cvCreateImage(frame_size, IPL_DEPTH_8U, 1);
       ASSERT_GOTO(gray_image, on_error);
       gray_mat = cvGetMat(gray_image, &header);
@@ -473,8 +474,11 @@ static int estimate_shadow_xtimes
   static const real_type not_found = -1;
 
   IplImage* curr_image = NULL;
+  IplImage* prev_image = NULL;
   CvMat* prev_mat = NULL;
   CvMat* curr_mat = NULL;
+  CvMat prev_header;
+  CvMat curr_header;
   unsigned int nrows = 0;
   unsigned int ncols = 0;
   int error = -1;
@@ -483,20 +487,23 @@ static int estimate_shadow_xtimes
 
   for (unsigned int frame_index = 0; true; ++frame_index)
   {
-    // before creating curr_image
-    prev_mat = curr_mat;
-
     IplImage* const frame_image = cvQueryFrame(cap);
     if (frame_image == NULL) break ;
 
-    // create if not yet done
-    if (curr_image == NULL)
+    // create on first pass
+    if (frame_index == 0)
     {
-      CvMat header;
       CvSize size = cvGetSize(frame_image);
+
       curr_image = cvCreateImage(size, IPL_DEPTH_8U, 1);
       ASSERT_GOTO(curr_image, on_error);
-      curr_mat = cvGetMat(frame_image, &header);
+
+      prev_image = cvCreateImage(size, IPL_DEPTH_8U, 1);
+      ASSERT_GOTO(prev_image, on_error);
+
+      // retrieve corresponding matrices
+      prev_mat = cvGetMat(prev_image, &prev_header);
+      curr_mat = cvGetMat(curr_image, &curr_header);
 
       // update nrows ncols
       nrows = size.height;
@@ -515,14 +522,15 @@ static int estimate_shadow_xtimes
 	}
     }
 
+    // swap prev and current before overriding
+    // fixme: copy could be avoided by swapping
+    // pointers and inside matrices.
+    cvCopy(curr_image, prev_image);
+
     cvCvtColor(frame_image, curr_image, CV_RGB2GRAY);
 
     // skip first pass
-    if (prev_mat == NULL)
-    {
-      prev_mat = curr_mat;
-      continue ;
-    }
+    if (frame_index == 0) continue ;
 
     // actual algorithm: detect entering and leaving times
     for (unsigned int i = 0; i < nrows; ++i)
@@ -576,7 +584,10 @@ static int estimate_shadow_xtimes
 	const real_type xtime_value =
 	  CV_MAT_ELEM(*xtime_mat[0], real_type, i, j);
 
-	const real_type scaled_value = xtime_value / max_value * 255;
+	real_type scaled_value = 0;
+	if (xtime_value != not_found)
+	  scaled_value = xtime_value / max_value * 255;
+
 	CV_MAT_ELEM(*cloned_mat, unsigned char, i, j) = floor(scaled_value);
       }
 
@@ -590,6 +601,7 @@ static int estimate_shadow_xtimes
 
  on_error:
   if (curr_image) cvReleaseImage(&curr_image);
+  if (prev_image) cvReleaseImage(&prev_image);
   return error;
 }
 
@@ -842,6 +854,7 @@ static int estimate_shadow_lines
 
   IplImage* gray_image = NULL;
   CvMat* gray_mat = NULL;
+  CvMat header;
 
   // {vertical,horizontal}_{enter,leave} points
   std::list<CvPoint> shadow_points[4];
@@ -876,7 +889,6 @@ static int estimate_shadow_lines
     // create if does not yet exist
     if (gray_image == NULL)
     {
-      CvMat header;
       gray_image = cvCreateImage(cvGetSize(frame_image), IPL_DEPTH_8U, 1);
       ASSERT_GOTO(gray_image, on_error);
       gray_mat = cvGetMat(gray_image, &header);
@@ -997,10 +1009,10 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   error = estimate_shadow_thresholds(cap, shadow_thresholds);
   ASSERT_GOTO(error == 0, on_error);
 
+  // show_matrix(shadow_thresholds);
+
   error = estimate_shadow_xtimes(cap, shadow_thresholds, shadow_xtimes);
   ASSERT_GOTO(error == 0, on_error);  
-
-  // show_matrix(shadow_thresholds);
 
   error = fit_line(user_points.mline, line_eqs.middle);
   ASSERT_GOTO(error == 0, on_error);
@@ -1009,9 +1021,6 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   ASSERT_GOTO(error == 0, on_error);
 
 #if 0
-
-  error = estimate_shadow_cross_times(cap, shadow_xtimes);
-  ASSERT_GOTO(error == 0, on_error);
 
   show_estimations(cap);
 
