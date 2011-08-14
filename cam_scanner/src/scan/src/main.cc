@@ -128,7 +128,7 @@ static int get_static_user_points(user_points_t& points)
 
   points.hplane[0].x = 98;
   points.hplane[0].y = 333;
-  points.hplane[1].x = 425;
+  points.hplane[1].x = 415;
   points.hplane[1].y = 378;
 
   points.vcorner[0].x = 110;
@@ -713,7 +713,7 @@ static int estimate_shadow_planes
   hbox.height = (user_points.hplane[1].y - 1) - hbox.y;
 
   // toremove
-  unsigned int frame_index = 86;
+  unsigned int frame_index = 80;
   seek_capture(cap, frame_index);
   // rewind_capture(cap);
 
