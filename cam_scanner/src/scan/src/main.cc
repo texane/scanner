@@ -308,40 +308,51 @@ static int intersect_line_plane
 #endif // TODO
 
 
-#if 0 // TODO
-
-static double norm(const double* v, unsigned int n)
-{
-  double sum = 0;
-  for (; n; --n, ++v) sum += (*v) * (*v);
-  return sqrt(sum);
-}
-
-static void normalize
-(double* v, const int* x, double fc, double cc, double kc, double alphac)
-{
-  // TOOLBOX_calib/normalize.m
-  // TODO
-}
-
-static void pixel_to_ray
-(double* v, const int* x, double fc, double cc, double kc, double alphac)
+static int pixel_to_ray
+(const CvPoint& pixel, const cam_params_t& params, std::vector<real_type>& ray)
 {
   // compute the camera coorrdinates of the ray starting
-  // at the camera point and passing by the pixel x.
-  //
-  // v the resulting ray vector
-  // x the pixel coordinates
-  // fc, cc, kc, alphac the camera intrinsic parameters
+  // at the camera point and passing by the given pixel.
+  // ray is the normalized 3d vector.
 
-  normalize(v, fc, cc, kc, alphac);
+  // todo: need optimization, dont undistort one pixel at a time
 
-  v[0] = x[0];
-  v[1] = x[1];
-  v[2] = 1;
+  int error = -1;
+  real_type norm;
+  CvScalar scalar;
+  CvMat* src = NULL;
+  CvMat* dst = NULL;
+
+  src = cvCreateMat(1, 1, CV_32FC2);
+  ASSERT_GOTO(src, on_error);
+
+  dst = cvCreateMat(1, 1, CV_32FC2);
+  ASSERT_GOTO(dst, on_error);
+
+  scalar.val[0] = (double)pixel.x;
+  scalar.val[1] = (double)pixel.y;
+  cvSet1D(src, 0, scalar);
+  cvUndistortPoints(src, dst, params.intrinsic, params.distortion);
+
+  scalar = cvGet1D(dst, 0);
+  scalar.val[2] = 1;
+
+  // normalize and assign
+  norm = 0;
+  for (unsigned int i = 0; i < 3; ++i)
+    norm += scalar.val[i] * scalar.val[i];
+
+  ray.resize(3);
+  for (unsigned int i = 0; i < 3; ++i)
+    ray[i] = scalar.val[i] / norm;
+
+  error = 0;
+
+ on_error:
+  if (src) cvReleaseMat(&src);
+  if (dst) cvReleaseMat(&dst);
+  return error;
 }
-
-#endif // TODO
 
 
 // shadow threshold estimtation
@@ -1150,6 +1161,19 @@ static int estimate_shadow_planes
   // compute the shadow planes
 
   error = 0;
+
+  // determine vertical plane
+  // point = intersect_line_line(venter[i], middle);
+  // ray = roth * pixel_to_ray(point, params);
+  // vplane = intersect_line_plane(C, ray)
+
+  // determine horizontal plane
+
+  // compute the entering plane params
+
+  // store the params in plane_eqs
+
+  // redo above steps for leaving plane
 
 //  on_error:
 
