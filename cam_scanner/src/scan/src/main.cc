@@ -1025,47 +1025,84 @@ static int estimate_shadow_lines
 static int estimate_reference_planes
 (CvCapture* cap, const cam_params_t& params, plane_eqs_t& plane_eqs)
 {
-  // X = [0 dX dX 0; 0 0 dY dY; 0 0 0 0];
-  // hPlane = fitPlane(X(1,:),X(2,:),X(3,:))';
-  // X = Rc_h'*(Rc_v*X + repmat(Tc_v-Tc_h,1,size(X,2)));
-  // vPlane = fitPlane(X(1,:),X(2,:),X(3,:))';
-
   // the length along x (resp. y) axis between checkboards rectangles
+
   static const real_type dx = 558.8;
   static const real_type dy = 303.2125;
 
+  // working matrices
+
+  CvMat* points = NULL;
+  CvMat* tsub = NULL;
+  CvMat* tmp = NULL;
+
+  // resulting error
+
   int error = -1;
 
-  // create a 4 3d points matrix
-  CvMat* points = cvCreateMat(4, 3, real_typeid);
+  // create and assign a points matrix
+
+  points = cvCreateMat(3, 3, real_typeid);
   ASSERT_GOTO(points, on_error);
 
   CV_MAT_ELEM(*points, real_type, 0, 0) = 0;
-  CV_MAT_ELEM(*points, real_type, 0, 1) = 0;
-  CV_MAT_ELEM(*points, real_type, 0, 2) = 0;
+  CV_MAT_ELEM(*points, real_type, 0, 1) = dx;
+  CV_MAT_ELEM(*points, real_type, 0, 2) = dx;
 
-  CV_MAT_ELEM(*points, real_type, 0, 0) = dx;
-  CV_MAT_ELEM(*points, real_type, 0, 1) = 0;
-  CV_MAT_ELEM(*points, real_type, 0, 2) = 0;
+  CV_MAT_ELEM(*points, real_type, 1, 0) = 0;
+  CV_MAT_ELEM(*points, real_type, 1, 1) = 0;
+  CV_MAT_ELEM(*points, real_type, 1, 2) = dy;
 
-  CV_MAT_ELEM(*points, real_type, 0, 0) = dx;
-  CV_MAT_ELEM(*points, real_type, 0, 1) = dy;
-  CV_MAT_ELEM(*points, real_type, 0, 2) = 0;
-
-  CV_MAT_ELEM(*points, real_type, 3, 0) = 0;
-  CV_MAT_ELEM(*points, real_type, 3, 1) = dy;
-  CV_MAT_ELEM(*points, real_type, 3, 2) = 0;
+  CV_MAT_ELEM(*points, real_type, 2, 0) = 0;
+  CV_MAT_ELEM(*points, real_type, 2, 1) = 0;
+  CV_MAT_ELEM(*points, real_type, 2, 2) = 0;
 
   error = fit_plane(points, plane_eqs.hplane);
   ASSERT_GOTO(error == 0, on_error);
+  error = -1;
 
-//   points = rh' * (Rc_v*X + repmat(Tc_v-Tc_h,1,size(X,2)));
-// X = Rc_h' * (Rc_v * X + repmat(Tc_v-Tc_h,1,size(X,2)));
+  // x = roth' * (rotv * x + repmat(transv - transh, 1, size(x, 2)));
+
+  // tmp = transv - transh
+
+  tmp = cvCreateMat
+    (params.transv->rows, params.transv->cols, params.transv->type);
+  ASSERT_GOTO(tmp, on_error);
+  cvSub(params.transv, params.transh, tmp);
+
+  // tsub = repmat(tmp, 1, size(x, 2));
+
+  tsub = cvCreateMat(params.transv->rows, points->cols, params.transv->type);
+  ASSERT_GOTO(tsub, on_error);
+
+  for (int i = 0; i < tsub->rows; ++i)
+    for (int j = 0; j < tsub->cols; ++j)
+      CV_MAT_ELEM(*tsub, real_type, i, j) = CV_MAT_ELEM(*tmp, real_type, i, 0);
+
+  cvReleaseMat(&tmp);
+
+  // tmp = rotv * x + tsub;
+
+  tmp = cvCreateMat(params.rotv->rows, points->cols, points->type);
+  ASSERT_GOTO(tmp, on_error);
+  cvGEMM(params.rotv, points, 1, tsub, 1, tmp, 0);
+
+  // x = roth' * tmp;
+
+  cvGEMM(params.roth, tmp, 1, NULL, 0, points, CV_GEMM_A_T);
+
+  // fit the plane
+
+  error = fit_plane(points, plane_eqs.vplane);
+  ASSERT_GOTO(error == 0, on_error);
+  error = -1;
 
   error = 0;
 
  on_error:
   if (points) cvReleaseMat(&points);
+  if (tmp) cvReleaseMat(&tmp);
+  if (tsub) cvReleaseMat(&tsub);
 
   return error;
 }
