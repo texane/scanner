@@ -47,6 +47,14 @@ typedef struct cam_params
   CvMat* intrinsic;
   CvMat* distortion;
   CvMat* extrinsic;
+
+  // toremove
+  CvMat* roth;
+  CvMat* rotv;
+  CvMat* transh;
+  CvMat* transv;
+  // toremove
+
 } cam_params_t;
 
 

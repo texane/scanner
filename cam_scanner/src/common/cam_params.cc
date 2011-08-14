@@ -14,13 +14,6 @@
 // </params>
 
 
-#if REAL_TYPE_IS_DOUBLE
-  static const int mat_type = CV_64FC1;
-#else
-  static const int mat_type = CV_32FC1;
-#endif
-
-
 int cam_params_load(cam_params_t& params, const std::string& filename)
 {
   // assume error
@@ -48,15 +41,6 @@ int cam_params_load(cam_params_t& params, const std::string& filename)
   return error;
 }
 
-
-#if 0 // unused
-static void cam_params_get_fc(real_type* fc, const cam_params_t& params)
-{
-  // get the focal length fx, fy from the intrinsic matrix
-  fc[0] = CV_MAT_ELEM(*params.intrinsic, real_type, 0, 0);
-  fc[1] = CV_MAT_ELEM(*params.intrinsic, real_type, 1, 1);
-}
-#endif // unused
 
 int cam_params_load_ml
 (cam_params_t& params, const std::string& filename, bool is_lowres)
@@ -148,6 +132,39 @@ int cam_params_load_ml
     CV_MAT_ELEM(*params.extrinsic, real_type, 1, i) = t[i];
   }
 
+  // toremove
+  // coeffs have been measured with lowres calibration data
+
+  CV_MAT_ELEM(*params.transh, real_type, 0, 0) = -326.24;
+  CV_MAT_ELEM(*params.transh, real_type, 0, 1) = 222.80;
+  CV_MAT_ELEM(*params.transh, real_type, 0, 2) = 1554.56;
+
+  CV_MAT_ELEM(*params.transv, real_type, 0, 0) = -325.598;
+  CV_MAT_ELEM(*params.transv, real_type, 0, 1) = -43.396;
+  CV_MAT_ELEM(*params.transv, real_type, 0, 2) = 1872.990;
+
+  CV_MAT_ELEM(*params.roth, real_type, 0, 0) = 0.9998060;
+  CV_MAT_ELEM(*params.roth, real_type, 0, 1) = 0.0031637;
+  CV_MAT_ELEM(*params.roth, real_type, 0, 2) = -0.0194433;
+  CV_MAT_ELEM(*params.roth, real_type, 1, 0) = -0.0159738;
+  CV_MAT_ELEM(*params.roth, real_type, 1, 1) = -0.4473934;
+  CV_MAT_ELEM(*params.roth, real_type, 1, 2) = -0.8941946;
+  CV_MAT_ELEM(*params.roth, real_type, 2, 0) = -0.0115278;
+  CV_MAT_ELEM(*params.roth, real_type, 2, 1) = 0.8943316;
+  CV_MAT_ELEM(*params.roth, real_type, 2, 2) = -0.4472561;
+
+  CV_MAT_ELEM(*params.rotv, real_type, 0, 0) = 0.9997963;
+  CV_MAT_ELEM(*params.rotv, real_type, 0, 1) = -0.0199377;
+  CV_MAT_ELEM(*params.rotv, real_type, 0, 2) = -0.0031347;
+  CV_MAT_ELEM(*params.rotv, real_type, 1, 0) = -0.0163380;
+  CV_MAT_ELEM(*params.rotv, real_type, 1, 1) = -0.8907100;
+  CV_MAT_ELEM(*params.rotv, real_type, 1, 2) = 0.4542784;
+  CV_MAT_ELEM(*params.rotv, real_type, 2, 0) = -0.0118494;
+  CV_MAT_ELEM(*params.rotv, real_type, 2, 1) = -0.4541346;
+  CV_MAT_ELEM(*params.rotv, real_type, 2, 2) = -0.8908543;
+
+  // toremove
+
   return 0;
 }
 
@@ -171,13 +188,27 @@ int cam_params_save(const cam_params_t& params, const std::string& filename)
 
 int cam_params_create(cam_params_t& params)
 {
-  params.intrinsic = cvCreateMat(3, 3, mat_type);
-  params.distortion = cvCreateMat(5, 1, mat_type);
-  params.extrinsic = cvCreateMat(2, 3, mat_type);
+  params.intrinsic = cvCreateMat(3, 3, real_typeid);
+  params.distortion = cvCreateMat(5, 1, real_typeid);
+  params.extrinsic = cvCreateMat(2, 3, real_typeid);
 
   ASSERT_RETURN(params.intrinsic != NULL, -1);
   ASSERT_RETURN(params.distortion != NULL, -1);
   ASSERT_RETURN(params.extrinsic != NULL, -1);
+
+  // toremove
+
+  params.transh = cvCreateMat(3, 1, real_typeid);
+  params.transv = cvCreateMat(3, 1, real_typeid);
+  params.roth = cvCreateMat(3, 3, real_typeid);
+  params.rotv = cvCreateMat(3, 3, real_typeid);
+
+  ASSERT_RETURN(params.transh != NULL, -1);
+  ASSERT_RETURN(params.transv != NULL, -1);
+  ASSERT_RETURN(params.roth != NULL, -1);
+  ASSERT_RETURN(params.rotv != NULL, -1);
+
+  // toremove
 
   return 0;
 }
@@ -192,6 +223,20 @@ int cam_params_release(cam_params_t& params)
   cvReleaseMat(&params.intrinsic);
   cvReleaseMat(&params.distortion);
   cvReleaseMat(&params.extrinsic);
+
+  // toremove
+
+  ASSERT_RETURN(params.transh != NULL, -1);
+  ASSERT_RETURN(params.transv != NULL, -1);
+  ASSERT_RETURN(params.roth != NULL, -1);
+  ASSERT_RETURN(params.rotv != NULL, -1);
+
+  cvReleaseMat(&params.transh);
+  cvReleaseMat(&params.transv);
+  cvReleaseMat(&params.roth);
+  cvReleaseMat(&params.rotv);
+
+  // toremove
 
   return 0;
 }

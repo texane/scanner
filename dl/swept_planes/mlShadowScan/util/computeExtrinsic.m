@@ -72,8 +72,6 @@ nY = norm(VY);
 VZ = min(nX,nY)*cross(VX/nX,VY/nY);
 Basis = [Basis VZ];
 [x_basis] = project_points2(Basis,omc_ext,Tc_ext,fc,cc,kc,alpha_c);
-omc_ext
-Tc_ext
 dxpos = (x_basis(:,2)+x_basis(:,1))/2;
 dypos = (x_basis(:,4)+x_basis(:,3))/2;
 dzpos = (x_basis(:,6)+x_basis(:,5))/2;

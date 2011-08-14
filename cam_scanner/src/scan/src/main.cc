@@ -10,15 +10,6 @@
 #include "common/cam_params.hh"
 
 
-#if REAL_TYPE_IS_DOUBLE
-static const int real_typeid = CV_64FC1;
-typedef CvPoint3D64f point3_type;
-#else
-static const int real_typeid = CV_32FC1;
-typedef CvPoint3D32f point3_type;
-#endif
-
-
 // show an image or a matrix
 
 __attribute__((unused))
@@ -728,7 +719,7 @@ static int fit_plane(const CvMat* points, real_type plane[4])
 
   const int nrows = points->rows;
   const int ncols = points->cols;
-  const int type  = points->type;
+  const int type = points->type;
 
   centroid = cvCreateMat(1, ncols, type);
   ASSERT_GOTO(centroid, on_error);
@@ -1067,6 +1058,9 @@ static int estimate_reference_planes
 
   error = fit_plane(points, plane_eqs.hplane);
   ASSERT_GOTO(error == 0, on_error);
+
+//   points = rh' * (Rc_v*X + repmat(Tc_v-Tc_h,1,size(X,2)));
+// X = Rc_h' * (Rc_v * X + repmat(Tc_v-Tc_h,1,size(X,2)));
 
   error = 0;
 
