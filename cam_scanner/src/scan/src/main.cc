@@ -11,9 +11,11 @@
 
 
 #if REAL_TYPE_IS_DOUBLE
-  static const int real_typeid = CV_64FC1;
+static const int real_typeid = CV_64FC1;
+typedef CvPoint3D64f point3_type;
 #else
-  static const int real_typeid = CV_32FC1;
+static const int real_typeid = CV_32FC1;
+typedef CvPoint3D32f point3_type;
 #endif
 
 
@@ -314,13 +316,6 @@ static int intersect_line_plane
 #endif // TODO
 
 
-#if 0 // fitting routines
-
-static void fit_plane(void);
-
-#endif // fitting routines
-
-
 #if 0 // TODO
 
 static double norm(const double* v, unsigned int n)
@@ -568,7 +563,7 @@ static int estimate_shadow_xtimes
       }
   }
 
-#if 1 // plot (entering) shadow xtimes
+#if 0 // plot (entering) shadow xtimes
   {
     IplImage* cloned_image = cvCloneImage(curr_image);
     ASSERT_GOTO(cloned_image, on_error);
@@ -716,6 +711,86 @@ static int fit_line(const CvPoint points[2], real_type w[3])
 }
 
 
+static int fit_plane(const CvMat* points, real_type plane[4])
+{
+  // from cvStructuredLight/cvUtilProCam.cpp
+  // points is a n x m matrix where M the dimensionality
+
+  int error = -1;
+
+  CvMat* centroid = NULL;
+  CvMat* points2 = NULL;
+  CvMat* A = NULL;
+  CvMat* W = NULL;
+  CvMat* V = NULL;
+
+  // estimate geometric centroid
+
+  const int nrows = points->rows;
+  const int ncols = points->cols;
+  const int type  = points->type;
+
+  centroid = cvCreateMat(1, ncols, type);
+  ASSERT_GOTO(centroid, on_error);
+
+  cvSet(centroid, cvScalar(0));
+  for (int c = 0; c < ncols; ++c)
+  {
+    for (int r = 0; r < nrows; ++r)
+      centroid->data.fl[c] += points->data.fl[ncols * r + c];
+    centroid->data.fl[c] /= nrows;
+  }
+	
+  // subtract geometric centroid from each point
+
+  points2 = cvCreateMat(nrows, ncols, type);
+  ASSERT_GOTO(points2, on_error);
+
+  for (int r = 0; r < nrows; ++r)
+    for (int c = 0; c < ncols; ++c)
+    {
+      points2->data.fl[ncols * r + c] =
+	points->data.fl[ncols * r + c] - centroid->data.fl[c];
+    }
+	
+  // evaluate SVD of covariance matrix
+
+  A = cvCreateMat(ncols, ncols, type);
+  ASSERT_GOTO(A, on_error);
+
+  W = cvCreateMat(ncols, ncols, type);
+  ASSERT_GOTO(W, on_error);
+
+  V = cvCreateMat(ncols, ncols, type);
+  ASSERT_GOTO(V, on_error);
+
+  cvGEMM(points2, points, 1, NULL, 0, A, CV_GEMM_A_T); 
+  cvSVD(A, W, NULL, V, CV_SVD_V_T);
+
+  // assign plane coefficients by singular vector
+  // corresponding to smallest singular value
+
+  plane[ncols] = 0;
+  for (int c = 0; c < ncols; ++c)
+  {
+    plane[c] = V->data.fl[ncols * (ncols - 1) + c];
+    plane[ncols] += plane[c] * centroid->data.fl[c];
+  }
+
+  error = 0;
+
+ on_error:
+
+  if (centroid) cvReleaseMat(&centroid);
+  if (points2) cvReleaseMat(&points2);
+  if (A) cvReleaseMat(&A);
+  if (W) cvReleaseMat(&W);
+  if (V) cvReleaseMat(&V);
+
+  return error;
+}
+
+
 __attribute__((unused))static int draw_implicit_line
 (IplImage* image, const real_type w[3], const CvScalar& color)
 {
@@ -790,7 +865,7 @@ __attribute__((unused))static int draw_implicit_line
 
 typedef struct line_eqs
 {
-  // line implicit equation coefficients
+  // line explicit equation coefficients
 
   real_type venter_shadow[3];
   real_type vleave_shadow[3];
@@ -804,11 +879,12 @@ typedef struct line_eqs
 
 typedef struct plane_eqs
 {
-  // plane equations
+  // plane explicit equation coefficients
 
-  unsigned int todo;
+  real_type vplane[4];
+  real_type hplane[4];
 
-} planes_eqs_t;
+} plane_eqs_t;
 
 
 __attribute__((unused))
@@ -913,7 +989,7 @@ static int estimate_shadow_lines
     fit_line(shadow_points[2], line_eqs.henter_shadow);
     fit_line(shadow_points[3], line_eqs.hleave_shadow);
 
-#if 1 // plot the lines
+#if 0 // plot the lines
     {
       static const CvScalar colors[] =
       {
@@ -955,39 +1031,50 @@ static int estimate_shadow_lines
 }
 
 
-#if 0 // TODO
-static void show_estimations(CvCapture* cap)
+static int estimate_reference_planes
+(CvCapture* cap, const cam_params_t& params, plane_eqs_t& plane_eqs)
 {
+  // X = [0 dX dX 0; 0 0 dY dY; 0 0 0 0];
+  // hPlane = fitPlane(X(1,:),X(2,:),X(3,:))';
+  // X = Rc_h'*(Rc_v*X + repmat(Tc_v-Tc_h,1,size(X,2)));
+  // vPlane = fitPlane(X(1,:),X(2,:),X(3,:))';
+
+  // the length along x (resp. y) axis between checkboards rectangles
+  static const real_type dx = 558.8;
+  static const real_type dy = 303.2125;
+
+  int error = -1;
+
+  // create a 4 3d points matrix
+  CvMat* points = cvCreateMat(4, 3, real_typeid);
+  ASSERT_GOTO(points, on_error);
+
+  CV_MAT_ELEM(*points, real_type, 0, 0) = 0;
+  CV_MAT_ELEM(*points, real_type, 0, 1) = 0;
+  CV_MAT_ELEM(*points, real_type, 0, 2) = 0;
+
+  CV_MAT_ELEM(*points, real_type, 0, 0) = dx;
+  CV_MAT_ELEM(*points, real_type, 0, 1) = 0;
+  CV_MAT_ELEM(*points, real_type, 0, 2) = 0;
+
+  CV_MAT_ELEM(*points, real_type, 0, 0) = dx;
+  CV_MAT_ELEM(*points, real_type, 0, 1) = dy;
+  CV_MAT_ELEM(*points, real_type, 0, 2) = 0;
+
+  CV_MAT_ELEM(*points, real_type, 3, 0) = 0;
+  CV_MAT_ELEM(*points, real_type, 3, 1) = dy;
+  CV_MAT_ELEM(*points, real_type, 3, 2) = 0;
+
+  error = fit_plane(points, plane_eqs.hplane);
+  ASSERT_GOTO(error == 0, on_error);
+
+  error = 0;
+
+ on_error:
+  if (points) cvReleaseMat(&points);
+
+  return error;
 }
-#endif // TODO
-
-
-#if 0 // TODO
-static void generate_depth_map(void)
-{
-  // foreach shadowed pixel
-  // . generate ray equation with camera pos
-  // . intersect with shadow plane
-}
-#endif // TODO
-
-
-#if 0 // TODO
-static void show_depth_map(CvMat* depth_map)
-{
-  // depth map a double matrix
-}
-#endif // TODO
-
-
-#if 0 // TODO
-static void generate_points
-(scan_data_t& scan_data, std::list<v3d_t>& scan_points)
-{
-  // foreach pixel, generate the parametric ray equation
-  // and inersect with the corresponding shadow plane
-}
-#endif // TODO
 
 
 // scan main routine
@@ -998,6 +1085,7 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   CvMat* shadow_xtimes[2] = { NULL, NULL };
   user_points_t user_points;
   line_eqs_t line_eqs;
+  plane_eqs_t plane_eqs;
   int error = -1;
 
   // error = get_user_points(cap, user_points);
@@ -1020,17 +1108,12 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   error = estimate_shadow_lines(cap, shadow_thresholds, user_points, line_eqs);
   ASSERT_GOTO(error == 0, on_error);
 
-#if 0
+  error = estimate_reference_planes(cap, params, plane_eqs);
+  ASSERT_GOTO(error == 0, on_error);
 
-  show_estimations(cap);
+  // todo: determine shadow planes representations
 
-  generate_depth_map(scan_data);
-  show_depth_map(depth_map);
-
-  typedef struct scan_data;
-  std::list<v3d_t> scan_points;
-  generate_points(scan_data, scan_points);
-#endif
+  // todo: intersect pixel rays with shadow planes
 
   error = 0;
 
