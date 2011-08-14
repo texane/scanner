@@ -1,0 +1,13 @@
+-- algorithm overview
+
+-- shadow point detection
+
+. important
+ . it is very important the reference area is free of every object that
+ could generate a point during the shadow point detection. Especially, the
+ bounding box must not include any corner part. It is generally better to
+ have a smaller reference area.
+
+-- results
+
+-- references
