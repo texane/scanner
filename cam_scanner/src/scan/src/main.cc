@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <list>
+#include <vector>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include "common/assert.hh"
@@ -638,7 +639,8 @@ static void get_shadow_points
 }
 
 
-static int fit_line(const std::list<CvPoint>& points, real_type w[3])
+static int fit_line
+(const std::list<CvPoint>& points, std::vector<real_type>& w)
 {
   // find a line that best fits points. use least square error method.
   // w contains the resulting line explicit coefficients such that:
@@ -693,7 +695,8 @@ static int fit_line(const std::list<CvPoint>& points, real_type w[3])
 }
 
 
-static int fit_line(const CvPoint points[2], real_type w[3])
+static int fit_line
+(const CvPoint points[2], std::vector<real_type>& w)
 {
   std::list<CvPoint> point_list;
   point_list.push_back(points[0]);
@@ -702,7 +705,8 @@ static int fit_line(const CvPoint points[2], real_type w[3])
 }
 
 
-static int fit_plane(const CvMat* points, real_type plane[4])
+static int fit_plane
+(const CvMat* points, std::vector<real_type>& plane)
 {
   // from cvStructuredLight/cvUtilProCam.cpp
   // points is a n x m matrix where M the dimensionality
@@ -731,7 +735,7 @@ static int fit_plane(const CvMat* points, real_type plane[4])
       centroid->data.fl[c] += points->data.fl[ncols * r + c];
     centroid->data.fl[c] /= nrows;
   }
-	
+
   // subtract geometric centroid from each point
 
   points2 = cvCreateMat(nrows, ncols, type);
@@ -783,7 +787,7 @@ static int fit_plane(const CvMat* points, real_type plane[4])
 
 
 __attribute__((unused))static int draw_implicit_line
-(IplImage* image, const real_type w[3], const CvScalar& color)
+(IplImage* image, const std::vector<real_type>& w, const CvScalar& color)
 {
   // draw the line whose implicit form coefficients are in w[3]
   // x = (w[2] - w[1] * y) / w[0];
@@ -858,12 +862,12 @@ typedef struct line_eqs
 {
   // line explicit equation coefficients
 
-  real_type venter_shadow[3];
-  real_type vleave_shadow[3];
-  real_type henter_shadow[3];
-  real_type hleave_shadow[3];
+  std::list< std::vector<real_type> > venter;
+  std::list< std::vector<real_type> > vleave;
+  std::list< std::vector<real_type> > henter;
+  std::list< std::vector<real_type> > hleave;
 
-  real_type middle[3];
+  std::vector<real_type> middle;
 
 } line_eqs_t;
 
@@ -872,31 +876,36 @@ typedef struct plane_eqs
 {
   // plane explicit equation coefficients
 
-  real_type vplane[4];
-  real_type hplane[4];
+  std::vector<real_type> vplane;
+  std::vector<real_type> hplane;
 
 } plane_eqs_t;
 
 
 __attribute__((unused))
-static int check_shadow_lines(const line_eqs_t& eqs)
+static int check_shadow_lines
+(
+ const std::vector<real_type>& hline,
+ const std::vector<real_type>& vline,
+ const std::vector<real_type>& mline
+)
 {
   // entering (resp. leaving) lines should intersect on the middle line
   // w the lines implicit form coefficients
 
   // solve intersection
 
-  const real_type a0 = -eqs.venter_shadow[0] / eqs.venter_shadow[1];
-  const real_type b0 = eqs.venter_shadow[2] / eqs.venter_shadow[1];
+  const real_type a0 = -vline[0] / vline[1];
+  const real_type b0 = vline[2] / vline[1];
 
-  const real_type a1 = -eqs.henter_shadow[0] / eqs.henter_shadow[1];
-  const real_type b1 = eqs.henter_shadow[2] / eqs.henter_shadow[1];
+  const real_type a1 = -hline[0] / hline[1];
+  const real_type b1 = hline[2] / hline[1];
 
   const real_type x = (b0 - b1) / (a0 - a1) * -1;
   const real_type y = a0 * x + b0;
 
-  const real_type am = -eqs.middle[0] / eqs.middle[1];
-  const real_type bm = eqs.middle[2] / eqs.middle[1];
+  const real_type am = -mline[0] / mline[1];
+  const real_type bm = mline[2] / mline[1];
 
   const real_type xm = x;
   const real_type ym = am * xm + bm;
@@ -941,14 +950,13 @@ static int estimate_shadow_lines
   hbox.y = user_points.hplane[0].y + 1;
   hbox.height = (user_points.hplane[1].y - 1) - hbox.y;
 
-  // toremove
-  unsigned int frame_index = 80;
-  seek_capture(cap, frame_index);
-  // rewind_capture(cap);
+  // unsigned int frame_index = 80;
+  // seek_capture(cap, frame_index);
+  rewind_capture(cap);
 
   while (1)
   {
-    printf("frame_index == %u\n", frame_index++);
+    // printf("frame_index == %u\n", frame_index++);
 
     IplImage* const frame_image = cvQueryFrame(cap);
     if (frame_image == NULL) break ;
@@ -975,10 +983,21 @@ static int estimate_shadow_lines
     get_shadow_points(gray_mat, thr_mat, hbox, shadow_points + 2);
 
     // get lines equation via lse fitting method
-    fit_line(shadow_points[0], line_eqs.venter_shadow);
-    fit_line(shadow_points[1], line_eqs.vleave_shadow);
-    fit_line(shadow_points[2], line_eqs.henter_shadow);
-    fit_line(shadow_points[3], line_eqs.hleave_shadow);
+
+    std::vector<real_type> line_eq;
+    line_eq.resize(3);
+
+    fit_line(shadow_points[0], line_eq);
+    line_eqs.venter.push_back(line_eq);
+
+    fit_line(shadow_points[1], line_eq);
+    line_eqs.vleave.push_back(line_eq);
+
+    fit_line(shadow_points[2], line_eq);
+    line_eqs.henter.push_back(line_eq);
+
+    fit_line(shadow_points[3], line_eq);
+    line_eqs.hleave.push_back(line_eq);
 
 #if 0 // plot the lines
     {
@@ -997,12 +1016,14 @@ static int estimate_shadow_lines
       for (unsigned int i = 0; i < 4; ++i)
 	draw_points(cloned_image, shadow_points[i], colors[i]);
 
-      draw_implicit_line(cloned_image, line_eqs.venter_shadow, colors[0]);
-      draw_implicit_line(cloned_image, line_eqs.vleave_shadow, colors[1]);
-      draw_implicit_line(cloned_image, line_eqs.henter_shadow, colors[2]);
-      draw_implicit_line(cloned_image, line_eqs.hleave_shadow, colors[3]);
+      draw_implicit_line(cloned_image, line_eqs.venter.back(), colors[0]);
+      draw_implicit_line(cloned_image, line_eqs.vleave.back(), colors[1]);
+      draw_implicit_line(cloned_image, line_eqs.henter.back(), colors[2]);
+      draw_implicit_line(cloned_image, line_eqs.hleave.back(), colors[3]);
 
-      if (check_shadow_lines(line_eqs) == -1)
+      const int res = check_shadow_lines
+	(line_eqs.venter.back(), line_eqs.henter.back(), line_eqs.middle);
+      if (res == -1)
       {
 	printf("invalid shadow lines\n");
 	draw_implicit_line(cloned_image, line_eqs.middle, colors[4]);
@@ -1057,6 +1078,7 @@ static int estimate_reference_planes
   CV_MAT_ELEM(*points, real_type, 2, 1) = 0;
   CV_MAT_ELEM(*points, real_type, 2, 2) = 0;
 
+  plane_eqs.hplane.resize(4);
   error = fit_plane(points, plane_eqs.hplane);
   ASSERT_GOTO(error == 0, on_error);
   error = -1;
@@ -1093,6 +1115,7 @@ static int estimate_reference_planes
 
   // fit the plane
 
+  plane_eqs.vplane.resize(4);
   error = fit_plane(points, plane_eqs.vplane);
   ASSERT_GOTO(error == 0, on_error);
   error = -1;
@@ -1103,6 +1126,31 @@ static int estimate_reference_planes
   if (points) cvReleaseMat(&points);
   if (tmp) cvReleaseMat(&tmp);
   if (tsub) cvReleaseMat(&tsub);
+
+  return error;
+}
+
+
+static int estimate_shadow_planes
+(
+ CvCapture* cap,
+ const cam_params_t& params,
+ const line_eqs_t& line_eqs,
+ plane_eqs_t& plane_eqs
+)
+{
+  int error = -1;
+
+  // C = -Rc_h'*Tc_h;
+
+  // foreach frame
+  // determine true position of the shadow lines
+  // compute the shadow planes
+
+
+  error = 0;
+
+//  on_error:
 
   return error;
 }
@@ -1133,6 +1181,7 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   error = estimate_shadow_xtimes(cap, shadow_thresholds, shadow_xtimes);
   ASSERT_GOTO(error == 0, on_error);  
 
+  line_eqs.middle.resize(3);
   error = fit_line(user_points.mline, line_eqs.middle);
   ASSERT_GOTO(error == 0, on_error);
 
@@ -1142,9 +1191,10 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   error = estimate_reference_planes(cap, params, plane_eqs);
   ASSERT_GOTO(error == 0, on_error);
 
-  // todo: determine shadow planes representations
+  error = estimate_shadow_planes(cap, params, line_eqs, plane_eqs);
+  ASSERT_GOTO(error == 0, on_error);
 
-  // todo: intersect pixel rays with shadow planes
+  // todo: reconstruct_points by pixel rays shadow planes intersection
 
   error = 0;
 
