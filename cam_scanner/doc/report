@@ -1,3 +1,6 @@
+-- todo
+. relate data struct (ie. line_eqs_t) with graphical outputs
+
 -- background
 . geomtrical equations
 // intersection routines

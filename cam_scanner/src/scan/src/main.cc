@@ -10,6 +10,13 @@
 #include "common/cam_params.hh"
 
 
+#if REAL_TYPE_IS_DOUBLE
+  static const int real_typeid = CV_64FC1;
+#else
+  static const int real_typeid = CV_32FC1;
+#endif
+
+
 // show an image or a matrix
 
 __attribute__((unused))
@@ -454,6 +461,114 @@ static int estimate_shadow_thresholds(CvCapture* cap, CvMat*& thresholds)
   return error;
 }
 
+static int estimate_shadow_xtimes
+(CvCapture* cap, const CvMat* thr_mat, CvMat* xtime_mat[2])
+{
+  // estimate the per pixel shadow crossing times, where time is
+  // (roughly) the frame index. a pixel is considered entered
+  // (resp. left) by a shadow when its gray intensity changes
+  // from non shadow to shadow (resp. from non shadow to shadow)
+  // between the previous and current frame.
+
+  static const real_type not_found = -1;
+
+  IplImage* curr_image = NULL;
+  CvMat* prev_mat = NULL;
+  CvMat* curr_mat = NULL;
+  unsigned int nrows = 0;
+  unsigned int ncols = 0;
+  int error = -1;
+
+  rewind_capture(cap);
+
+  for (unsigned int frame_index = 0; true; ++frame_index)
+  {
+    // before creating curr_image
+    prev_mat = curr_mat;
+
+    IplImage* const frame_image = cvQueryFrame(cap);
+    if (frame_image == NULL) break ;
+
+    // create if not yet done
+    if (curr_image == NULL)
+    {
+      CvMat header;
+      CvSize size = cvGetSize(frame_image);
+      curr_image = cvCreateImage(size, IPL_DEPTH_8U, 1);
+      ASSERT_GOTO(curr_image, on_error);
+      curr_mat = cvGetMat(frame_image, &header);
+
+      // update nrows ncols
+      nrows = size.height;
+      ncols = size.width;
+
+      // allocate and initialize xtime matrices
+      xtime_mat[0] = cvCreateMat(nrows, ncols, real_typeid);
+      ASSERT_GOTO(xtime_mat[0], on_error);
+      xtime_mat[1] = cvCreateMat(nrows, ncols, real_typeid);
+      ASSERT_GOTO(xtime_mat[1], on_error);
+      for (unsigned int i = 0; i < nrows; ++i)
+	for (unsigned int j = 0; j < ncols; ++j)
+	{
+	  CV_MAT_ELEM(*xtime_mat[0], real_type, i, j) = not_found;
+	  CV_MAT_ELEM(*xtime_mat[1], real_type, i, j) = not_found;
+	}
+    }
+
+    cvCvtColor(frame_image, curr_image, CV_RGB2GRAY);
+
+    // skip first pass
+    if (prev_mat == NULL)
+    {
+      prev_mat = curr_mat;
+      continue ;
+    }
+
+    // actual algorithm: detect entering and leaving times
+    for (unsigned int i = 0; i < nrows; ++i)
+      for (unsigned int j = 0; j < ncols; ++j)
+      {
+	// entering xtime not already found
+	if (CV_MAT_ELEM(*xtime_mat[0], real_type, i, j) == not_found)
+	{
+	  const int prev_val = get_gray_elem(*prev_mat, i, j);
+	  const int curr_val = get_gray_elem(*curr_mat, i, j);
+	  const int thr_val = get_gray_elem(*thr_mat, i, j);
+
+	  if ((prev_val >= thr_val) && (curr_val < thr_val))
+	  {
+	    const real_type xtime = (real_type)frame_index +
+	      (real_type)(thr_val - prev_val) / (real_type)(curr_val - prev_val);
+	    CV_MAT_ELEM(*xtime_mat[0], real_type, i, j) = xtime;
+	  }
+	}
+
+	// leaving xtime not already found
+	if (CV_MAT_ELEM(*xtime_mat[1], real_type, i, j) == not_found)
+	{
+	  const int prev_val = get_gray_elem(*prev_mat, i, j);
+	  const int curr_val = get_gray_elem(*curr_mat, i, j);
+	  const int thr_val = get_gray_elem(*thr_mat, i, j);
+
+	  if ((prev_val < thr_val) && (curr_val >= thr_val))
+	  {
+	    const real_type xtime = (real_type)frame_index +
+	      (real_type)(thr_val - prev_val) / (real_type)(curr_val - prev_val);
+	    CV_MAT_ELEM(*xtime_mat[1], real_type, i, j) = xtime;
+	  }
+	}
+      }
+  }
+
+  // success
+  error = 0;
+
+ on_error:
+  if (curr_image) cvReleaseImage(&curr_image);
+  return error;
+}
+
+
 __attribute__((unused)) static void draw_points
 (IplImage* image, const std::list<CvPoint>& points, const CvScalar& color)
 {
@@ -461,6 +576,7 @@ __attribute__((unused)) static void draw_points
   std::list<CvPoint>::const_iterator end = points.end();
   for (; pos != end; ++pos) cvCircle(image, *pos, 1, color, -1);
 }
+
 
 static void get_shadow_points
 (
@@ -514,12 +630,6 @@ static int fit_line(const std::list<CvPoint>& points, real_type w[3])
     w[2] = 0;
     return -1;
   }
-
-#if REAL_TYPE_IS_DOUBLE
-  static const int real_typeid = CV_64FC1;
-#else
-  static const int real_typeid = CV_32FC1;
-#endif
 
   CvMat* y = cvCreateMat(points.size(), 1, real_typeid);
   CvMat* x = cvCreateMat(points.size(), 2, real_typeid);
@@ -807,20 +917,6 @@ static int estimate_shadow_lines
   return error;
 }
 
-#if 0 // TODO
-static int estimate_shadow_cross_times(CvCapture* cap)
-{
-  // estimate the per pixel shadow crossing time
-  // where time is the frame index. a pixel is
-  // considered entered by a shadow when its gray
-  // intensity changes from non shadow to shadow
-
-  rewind_capture(cap);
-
-  return -1;
-}
-#endif // TODO
-
 
 #if 0 // TODO
 static void show_estimations(CvCapture* cap)
@@ -862,14 +958,10 @@ static void generate_points
 static int do_scan(CvCapture* cap, const cam_params_t& params)
 {
   CvMat* shadow_thresholds = NULL;
+  CvMat* shadow_xtimes[2] = { NULL, NULL };
   user_points_t user_points;
   line_eqs_t line_eqs;
   int error = -1;
-
-  error = estimate_shadow_thresholds(cap, shadow_thresholds);
-  ASSERT_GOTO(error == 0, on_error);
-
-  // show_matrix(shadow_thresholds);
 
   // error = get_user_points(cap, user_points);
   error = get_static_user_points(user_points);
@@ -877,11 +969,18 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
 
   // print_user_points(user_points);
 
+  error = estimate_shadow_thresholds(cap, shadow_thresholds);
+  ASSERT_GOTO(error == 0, on_error);
+
+  error = estimate_shadow_xtimes(cap, shadow_thresholds, shadow_xtimes);
+  ASSERT_GOTO(error == 0, on_error);  
+
+  // show_matrix(shadow_thresholds);
+
   error = fit_line(user_points.mline, line_eqs.middle);
   ASSERT_GOTO(error == 0, on_error);
 
-  error = estimate_shadow_lines
-    (cap, shadow_thresholds, user_points, line_eqs);
+  error = estimate_shadow_lines(cap, shadow_thresholds, user_points, line_eqs);
   ASSERT_GOTO(error == 0, on_error);
 
 #if 0
@@ -903,33 +1002,11 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
 
  on_error:
   if (shadow_thresholds != NULL) cvReleaseMat(&shadow_thresholds);
+  if (shadow_xtimes[0] != NULL) cvReleaseMat(&shadow_xtimes[0]);
+  if (shadow_xtimes[1] != NULL) cvReleaseMat(&shadow_xtimes[1]);
 
   return error;
 }
-
-
-#if 0 // TODO
-
-// shadow plane lines evaluation
-static void evaluate_shadow_vline(const rectangle& area)
-{
-  // area the area to look into for plane for a line
-  // note that area comes from a previous user selection
-
-  sub = substract(image, shadow_values, area);
-  for (i = 0; i < rows(tmp); ++i)
-    for (j = 1; j < cols(tmp); ++j)
-    {
-      // entering shadow
-      if ((sub[i][j] < 0) && (sub[i][j - 1] >= 0))
-	entering_cols.append(j);
-      // leaving shadow
-      else if ((sub[i][j] >= 0) && (sub[i][j - 1] < 0))
-	leaving_cols.append(j);
-    }
-}
-
-#endif // TODO
 
 
 int main(int ac, char** av)
