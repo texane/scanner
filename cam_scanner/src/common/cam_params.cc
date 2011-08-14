@@ -136,12 +136,12 @@ int cam_params_load_ml
   // coeffs have been measured with lowres calibration data
 
   CV_MAT_ELEM(*params.transh, real_type, 0, 0) = -326.24;
-  CV_MAT_ELEM(*params.transh, real_type, 0, 1) = 222.80;
-  CV_MAT_ELEM(*params.transh, real_type, 0, 2) = 1554.56;
+  CV_MAT_ELEM(*params.transh, real_type, 1, 0) = 222.80;
+  CV_MAT_ELEM(*params.transh, real_type, 2, 0) = 1554.56;
 
   CV_MAT_ELEM(*params.transv, real_type, 0, 0) = -325.598;
-  CV_MAT_ELEM(*params.transv, real_type, 0, 1) = -43.396;
-  CV_MAT_ELEM(*params.transv, real_type, 0, 2) = 1872.990;
+  CV_MAT_ELEM(*params.transv, real_type, 1, 0) = -43.396;
+  CV_MAT_ELEM(*params.transv, real_type, 2, 0) = 1872.990;
 
   CV_MAT_ELEM(*params.roth, real_type, 0, 0) = 0.9998060;
   CV_MAT_ELEM(*params.roth, real_type, 0, 1) = 0.0031637;
