@@ -1,4 +1,32 @@
+-- background
+. geomtrical equations
+// intersection routines
+//
+// notes on representations
+// parametric equation: define a relation as a set of eq
+// implicit equation: f(x, y) = 0
+// explicit equation: f(x) = y
+// lines and planes are described by a coeff vector w.
+//
+// line parametric form:
+// p: q + u * v
+//
+// line explicit form
+// w[0] * x + w[1] = w[2]
+//
+// line implicit form
+// w[0] * x + w[1] * y + w[2] = 0
+//
+// plane explicit form:
+// w[0] * x + w[1] * y + w[2] * z = w[3]
+//
+// plane implicit form:
+// w[0] * x + w[1] * y + w[2] * z + w[3] = 0
+//
+
 -- algorithm overview
+
+-- calibration
 
 -- shadow point detection
 
@@ -7,6 +35,10 @@
  could generate a point during the shadow point detection. Especially, the
  bounding box must not include any corner part. It is generally better to
  have a smaller reference area.
+ . todo: screenshot of a bad versus good reference area
+
+-- shadow line fitting
+given the previously set of points, lse used to make
 
 -- results
 
