@@ -560,6 +560,31 @@ static int estimate_shadow_xtimes
       }
   }
 
+#if 1 // plot (entering) shadow xtimes
+  {
+    IplImage* cloned_image = cvCloneImage(curr_image);
+    ASSERT_GOTO(cloned_image, on_error);
+
+    CvMat header;
+    CvMat* const cloned_mat = cvGetMat(cloned_image, &header);
+
+    const real_type max_value = (real_type)get_capture_frame_count(cap);
+
+    for (unsigned int i = 0; i < nrows; ++i)
+      for (unsigned int j = 0; j < ncols; ++j)
+      {
+	const real_type xtime_value =
+	  CV_MAT_ELEM(*xtime_mat[0], real_type, i, j);
+
+	const real_type scaled_value = xtime_value / max_value * 255;
+	CV_MAT_ELEM(*cloned_mat, unsigned char, i, j) = floor(scaled_value);
+      }
+
+    show_image(cloned_image, "EnteringShadowCrossTimes");
+    cvReleaseImage(&cloned_image);
+  }
+#endif // plot shadow xtimes
+
   // success
   error = 0;
 
