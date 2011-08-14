@@ -868,6 +868,8 @@ typedef struct line_eqs
   std::list< std::vector<real_type> > hleave;
 
   std::vector<real_type> middle;
+  std::vector<real_type> upper;
+  std::vector<real_type> lower;
 
 } line_eqs_t;
 
@@ -1144,9 +1146,8 @@ static int estimate_shadow_planes
   // C = -Rc_h'*Tc_h;
 
   // foreach frame
-  // determine true position of the shadow lines
+  // determine true position of the lines
   // compute the shadow planes
-
 
   error = 0;
 
@@ -1155,6 +1156,45 @@ static int estimate_shadow_planes
   return error;
 }
 
+
+// special lines fitting routines
+
+static inline int fit_middle_line
+(const user_points_t& user_points, std::vector<real_type>& line_eq)
+{
+  line_eq.resize(3);
+  return fit_line(user_points.mline, line_eq);
+}
+
+
+static int fit_upper_line
+(const CvSize& image_size, std::vector<real_type>& line_eq)
+{
+  CvPoint points[2];
+
+  points[0].x = 0;
+  points[0].y = image_size.height;
+  points[1].x = image_size.width;
+  points[1].y = image_size.height;
+
+  line_eq.resize(3);
+  return fit_line(points, line_eq);
+}
+
+
+static int fit_lower_line
+(const CvSize& image_size, std::vector<real_type>& line_eq)
+{
+  CvPoint points[2];
+
+  points[0].x = 0;
+  points[0].y = 0;
+  points[1].x = image_size.width;
+  points[1].y = 0;
+
+  line_eq.resize(3);
+  return fit_line(points, line_eq);
+}
 
 // scan main routine
 
@@ -1165,6 +1205,7 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   user_points_t user_points;
   line_eqs_t line_eqs;
   plane_eqs_t plane_eqs;
+  CvSize frame_size;
   int error = -1;
 
   // error = get_user_points(cap, user_points);
@@ -1181,8 +1222,17 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   error = estimate_shadow_xtimes(cap, shadow_thresholds, shadow_xtimes);
   ASSERT_GOTO(error == 0, on_error);  
 
-  line_eqs.middle.resize(3);
-  error = fit_line(user_points.mline, line_eqs.middle);
+  error = fit_middle_line(user_points, line_eqs.middle);
+  ASSERT_GOTO(error == 0, on_error);
+
+  // fixme, rewinding should not be needed
+  rewind_capture(cap);
+  frame_size = get_capture_frame_size(cap);
+
+  error = fit_upper_line(frame_size, line_eqs.upper);
+  ASSERT_GOTO(error == 0, on_error);
+
+  error = fit_lower_line(frame_size, line_eqs.lower);
   ASSERT_GOTO(error == 0, on_error);
 
   error = estimate_shadow_lines(cap, shadow_thresholds, user_points, line_eqs);
