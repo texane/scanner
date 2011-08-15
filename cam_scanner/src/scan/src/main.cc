@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <list>
+#include <vector>
+#include <string>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include "common/assert.hh"
@@ -932,7 +934,7 @@ typedef struct plane_eqs
   real4 vplane;
   real4 hplane;
 
-  std::list<real4> shadow_planes;
+  std::vector<real4> shadow_planes;
 
 } plane_eqs_t;
 
@@ -1246,6 +1248,23 @@ template<typename type> static type cross(const type& a, const type& b)
 }
 
 
+static int compute_camera_center(const cam_params_t& params, real3& c)
+{
+  // compute camera center from params
+
+  CvMat* mat = cvCreateMat(3, 1, real_typeid);
+  ASSERT_RETURN(mat, -1);
+
+  // c = -roth' * transh;
+  cvGEMM(params.roth, params.transh, -1, NULL, 0, mat, CV_GEMM_A_T);
+  mat_to_real3(mat, c);
+
+  cvReleaseMat(&mat);
+
+  return 0;
+}
+
+
 static int estimate_shadow_planes
 (
  CvCapture* cap,
@@ -1263,6 +1282,8 @@ static int estimate_shadow_planes
   std::list<real3>::const_iterator henter_pos;
   std::list<real3>::const_iterator hleave_pos;
 
+  std::vector<real4>::iterator plane_pos;
+
   // line line intersection point
   real2 ll_point;
 
@@ -1271,31 +1292,32 @@ static int estimate_shadow_planes
 
   real3 ray;
 
-  // translated ray to fit opencv routines
+  // ray working matrix
   CvMat* ray_mat = NULL;
 
-  CvMat* rot_ray = NULL;
+  // rotation working matrix
+  CvMat* rot_mat = NULL;
 
   // camera center
   real3 c;
-  CvMat* c_mat = NULL;
 
   // uninitialized warnings
   for (unsigned int i = 0; i < 4; ++i)
     zero(plane_points[i]);
   zero(ll_point);
 
+  // allocate matrices
   ray_mat = cvCreateMat(3, 1, real_typeid);
   ASSERT_GOTO(ray_mat, on_error);
 
-  rot_ray = cvCreateMat(3, 1, real_typeid);
-  ASSERT_GOTO(rot_ray, on_error);
+  rot_mat = cvCreateMat(3, 1, real_typeid);
+  ASSERT_GOTO(rot_mat, on_error);
 
-  // c = -roth' * transh;
-  c_mat = cvCreateMat(3, 1, real_typeid);
-  ASSERT_GOTO(c_mat, on_error);
-  cvGEMM(params.roth, params.transh, -1, NULL, 0, c_mat, CV_GEMM_A_T);
-  mat_to_real3(c_mat, c);
+  // allocate the shadow plane vector
+  plane_eqs.shadow_planes.resize(get_capture_frame_count(cap));
+
+  // compute the camera center
+  compute_camera_center(params, c);
 
   // foreach frame
   // determine true position of the lines
@@ -1308,7 +1330,9 @@ static int estimate_shadow_planes
   henter_pos = line_eqs.henter.begin();
   hleave_pos = line_eqs.hleave.begin();
 
-  for (; true; ++venter_pos, ++vleave_pos, ++henter_pos, ++hleave_pos)
+  plane_pos = plane_eqs.shadow_planes.begin() + frame_index;
+
+  while (1)
   {
     IplImage* const frame_image = cvQueryFrame(cap);
     if (frame_image == NULL) break ;
@@ -1322,60 +1346,211 @@ static int estimate_shadow_planes
     intersect_line_line(*venter_pos, line_eqs.middle, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
-    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_ray, CV_GEMM_A_T);
-    mat_to_real3(rot_ray, ray);
+    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
+    mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.vplane, plane_points[0]);
 
     intersect_line_line(*venter_pos, line_eqs.upper, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
-    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_ray, CV_GEMM_A_T);
-    mat_to_real3(rot_ray, ray);
+    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
+    mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.vplane, plane_points[1]);
 
     intersect_line_line(*henter_pos, line_eqs.middle, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
-    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_ray, CV_GEMM_A_T);
-    mat_to_real3(rot_ray, ray);
+    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
+    mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[2]);
 
     intersect_line_line(*henter_pos, line_eqs.lower, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
-    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_ray, CV_GEMM_A_T);
-    mat_to_real3(rot_ray, ray);
+    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
+    mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[3]);
 
     // compute the entering plane params from plane_points
 
     // vertical and horizontal normalized vectors
-    {
-      real3 v;
-      v = sub(plane_points[1], plane_points[0]);
-      const real3 vv = div(v, norm(v));
-      v = sub(plane_points[3], plane_points[2]);
-      const real3 hv = div(v, norm(v));
-      v = cross(vv, hv);
-      const real3 xv = div(v, norm(v));
+    real3 v;
+    v = sub(plane_points[1], plane_points[0]);
+    const real3 vv = div(v, norm(v));
+    v = sub(plane_points[3], plane_points[2]);
+    const real3 hv = div(v, norm(v));
 
-      real4 plane;
-      for (unsigned int i = 0; i < 3; ++i) plane[i] = xv[i];
-      v = add(plane_points[0], plane_points[1]);
-      plane[4] = dot(xv, v) / 2;
+    // normalized cross product
+    v = cross(vv, hv);
+    const real3 xv = div(v, norm(v));
 
-      plane_eqs.shadow_planes.push_back(plane);
-    }
+    // store the explicit plane equation
+    real4& plane = *plane_pos;
+    for (unsigned int i = 0; i < 3; ++i) plane[i] = xv[i];
+    v = add(plane_points[0], plane_points[1]);
+    plane[4] = dot(xv, v) / 2;
+
+    // next frame
+    ++venter_pos;
+    ++vleave_pos;
+    ++henter_pos;
+    ++hleave_pos;
+    ++plane_pos;
   }
 
   // success
   error = 0;
 
  on_error:
-  if (c_mat) cvReleaseMat(&c_mat);
-  if (rot_ray) cvReleaseMat(&rot_ray);
+  if (rot_mat) cvReleaseMat(&rot_mat);
   if (ray_mat) cvReleaseMat(&ray_mat);
 
+  return error;
+}
+
+
+// 3d point reconstruction
+
+static inline real2 make_real2(real_type x, real_type y)
+{
+  real2 v;
+  v[0] = x;
+  v[1] = y;
+  return v;
+}
+
+static inline real3 make_real3(real_type x, real_type y, real_type z)
+{
+  real3 v;
+  v[0] = x;
+  v[1] = y;
+  v[2] = z;
+  return v;
+}
+
+static int reconstruct_points
+(
+ const cam_params_t& params,
+ const plane_eqs_t& plane_eqs,
+ CvMat* xtimes[2],
+ std::list<real3>& points
+)
+{
+  // reconstruct the 3 dimensionnal points using
+  // the previously derived shadow crossing times
+  // and planes.
+  // xtimes the entering and leaving crossing times
+  // points the resulting point list
+
+  static const real_type not_found = -1;
+
+  int error = -1;
+
+  // keep a reference on the entering crossing times
+  const CvMat* const xtimes_mat = xtimes[0];
+
+  // ray working matrix
+  CvMat* ray_mat = NULL;
+
+  // rotation working matrix
+  CvMat* rot_mat = NULL;
+
+  // ray equation
+  real3 ray;
+
+  // camera center
+  real3 c;
+
+  // reconstructed point
+  real3 p;
+
+  ray_mat = cvCreateMat(3, 1, real_typeid);
+  ASSERT_GOTO(ray_mat, on_error);
+
+  rot_mat = cvCreateMat(3, 1, real_typeid);
+  ASSERT_GOTO(ray_mat, on_error);
+
+  compute_camera_center(params, c);
+
+  // foreach pixel that has a crossing time
+  // compute the ray equation
+  
+  for (int i = 0; i < xtimes_mat->rows; ++i)
+    for (int j = 0; j < xtimes_mat->cols; ++j)
+    {
+      // the entering times, t1 <= t < t2
+      const real_type t = CV_MAT_ELEM(*xtimes_mat, real_type, i, j);
+      const real_type t1 = floor(t);
+      const real_type t2 = t1 + 1;
+
+      // no xtime for this pixel
+      if (t == not_found) continue ;
+
+      const unsigned int frame_index = (unsigned int)t1;
+
+      // debugging, work on both frame_index and frame_index + 1
+      if ((frame_index + 1) >= plane_eqs.shadow_planes.size())
+      {
+	printf("invalid frame_index == %u\n", frame_index);
+	continue ;
+      }
+
+      // compute the ray equation
+      const real2 pixel = make_real2((real_type)i, (real_type)j);
+      pixel_to_ray(pixel, params, ray);
+      real3_to_mat(ray, ray_mat);
+      cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
+      mat_to_real3(rot_mat, ray);
+
+      // average plane coefficients at t1 and t2
+      const real_type alpha = (t - t1) / (t2 - t1);
+      const real4& t1_plane = plane_eqs.shadow_planes[frame_index + 0];
+      const real4& t2_plane = plane_eqs.shadow_planes[frame_index + 1];
+      real4 plane;
+      for (unsigned int i = 0; i < 4; ++i)
+	plane[i] = (1 - alpha) * t1_plane[i] + alpha * t2_plane[i];
+
+      // intersect ray with shadow plane
+      if (intersect_line_plane(c, ray, plane, p) == -1) continue ;
+
+      points.push_back(p);
+    }
+
+  // success
+  error = 0;
+
+ on_error:
+  if (ray_mat) cvReleaseMat(&ray_mat);
+  if (rot_mat) cvReleaseMat(&rot_mat);
+
+  return error;
+}
+
+
+// write points as 3d triples
+
+static int write_points
+(const std::string& filename, const std::list<real3>& points)
+{
+  int error = -1;
+
+  std::list<real3>::const_iterator pos = points.begin();
+  std::list<real3>::const_iterator end = points.end();
+
+  FILE* const file = fopen(filename.c_str(), "w+");
+  ASSERT_GOTO(file, on_error);
+
+  for (; pos != end; ++pos)
+  {
+    const real3& p = *pos;
+    const int res = fprintf(file, "%lf %lf %lf\n", p[0], p[1], p[2]);
+    ASSERT_GOTO(res > 0, on_error);
+  }
+
+  error = 0;
+
+ on_error:
+  if (file) fclose(file);
   return error;
 }
 
@@ -1420,13 +1595,14 @@ static int fit_lower_line
 
 static int do_scan(CvCapture* cap, const cam_params_t& params)
 {
+  int error = -1;
   CvMat* shadow_thresholds = NULL;
   CvMat* shadow_xtimes[2] = { NULL, NULL };
   user_points_t user_points;
   line_eqs_t line_eqs;
   plane_eqs_t plane_eqs;
   CvSize frame_size;
-  int error = -1;
+  std::list<real3> points;
 
   // error = get_user_points(cap, user_points);
   error = get_static_user_points(user_points);
@@ -1464,7 +1640,11 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   error = estimate_shadow_planes(cap, params, line_eqs, plane_eqs);
   ASSERT_GOTO(error == 0, on_error);
 
-  // todo: reconstruct_points by pixel rays shadow planes intersection
+  error = reconstruct_points(params, plane_eqs, shadow_xtimes, points);
+  ASSERT_GOTO(error == 0, on_error);
+
+  error = write_points("/tmp/fu.asc", points);
+  ASSERT_GOTO(error == 0, on_error);
 
   error = 0;
 
