@@ -357,10 +357,10 @@ static int pixel_to_ray
   CvMat* src = NULL;
   CvMat* dst = NULL;
 
-  src = cvCreateMat(1, 1, real_typeid);
+  src = cvCreateMat(1, 1, CV_32FC2);
   ASSERT_GOTO(src, on_error);
 
-  dst = cvCreateMat(1, 1, real_typeid);
+  dst = cvCreateMat(1, 1, CV_32FC2);
   ASSERT_GOTO(dst, on_error);
 
   scalar.val[0] = pixel[0];
@@ -1170,6 +1170,22 @@ static int estimate_reference_planes
 }
 
 
+static void real3_to_mat(const real3& r, CvMat* m)
+{
+  CV_MAT_ELEM(*m, real_type, 0, 0) = r[0];
+  CV_MAT_ELEM(*m, real_type, 1, 0) = r[1];
+  CV_MAT_ELEM(*m, real_type, 2, 0) = r[2];
+}
+
+
+static void mat_to_real3(const CvMat* m, real3& r)
+{
+  r[0] = CV_MAT_ELEM(*m, real_type, 0, 0);
+  r[1] = CV_MAT_ELEM(*m, real_type, 1, 0);
+  r[2] = CV_MAT_ELEM(*m, real_type, 2, 0);
+}
+
+
 static int estimate_shadow_planes
 (
  CvCapture* cap,
@@ -1216,9 +1232,7 @@ static int estimate_shadow_planes
   c_mat = cvCreateMat(3, 1, real_typeid);
   ASSERT_GOTO(c_mat, on_error);
   cvGEMM(params.roth, params.transh, -1, NULL, 0, c_mat, CV_GEMM_A_T);
-  c[0] = CV_MAT_ELEM(*c_mat, real_type, 0, 0);
-  c[1] = CV_MAT_ELEM(*c_mat, real_type, 1, 0);
-  c[2] = CV_MAT_ELEM(*c_mat, real_type, 2, 0);
+  mat_to_real3(c_mat, c);
 
   // foreach frame
   // determine true position of the lines
@@ -1245,15 +1259,11 @@ static int estimate_shadow_planes
     pixel_to_ray(ll_point, params, ray);
 
     // rotate ray by roth transposed
-    CV_MAT_ELEM(*ray_mat, real_type, 0, 0) = ray[0];
-    CV_MAT_ELEM(*ray_mat, real_type, 1, 0) = ray[1];
-    CV_MAT_ELEM(*ray_mat, real_type, 2, 0) = ray[2];
+    real3_to_mat(ray, ray_mat);
     cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_ray, CV_GEMM_A_T);
 
     // intersect ray plane
-    ray[0] = CV_MAT_ELEM(*rot_ray, real_type, 0, 0);
-    ray[1] = CV_MAT_ELEM(*rot_ray, real_type, 1, 0);
-    ray[2] = CV_MAT_ELEM(*rot_ray, real_type, 2, 0);
+    mat_to_real3(rot_ray, ray);
     intersect_line_plane(c, ray, plane_eqs.vplane, lp_point);
 
     // determine horizontal plane
