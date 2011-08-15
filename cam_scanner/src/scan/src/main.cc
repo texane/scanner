@@ -254,8 +254,6 @@ static int get_user_points(CvCapture* cap, user_points_t& points)
 }
 
 
-#if 0 // TODO
-
 // intersection routines
 //
 // notes on representations
@@ -280,32 +278,51 @@ static int get_user_points(CvCapture* cap, user_points_t& points)
 // w[0] * x + w[1] * y + w[2] * z + w[3] = 0
 //
 
-
-// define vNT, a vector N sized vector of T typed elements.
-typedef int[2] v2i_t;
-typedef double[2] v2d_t;
-typedef double[3] v3d_t;
-typedef double[4] v4d_t;
-
 static int intersect_line_line
-(v2d_t* res, const v3d_t* la, const v3d_t* lb)
+(
+ const std::vector<real_type>& p,
+ const std::vector<real_type>& q,
+ std::vector<real_type>& r
+)
 {
-  // inertsect 2 co planar lines
-  // la and lb the lines explicit forms
-  // res the 2d resulting point
+  // intersect 2 coplanar lines
+  // p and q the two lines in explicit forms
+  //rp the resulting intersection point, if any
+  // express the 2 lines equations in the form y = ax + b
+  // and solve a0 * x + b0 = a1 * x + b1
+
+  if ((p[1] == 0) || (q[1] == 0)) return -1;
+
+  const real_type a0 = -p[0] / p[1];
+  const real_type a1 = -q[0] / q[1];
+
+  if (fabs(a0 - a1) < 0.0001) return -1;
+
+  const real_type b0 = p[2] / p[1];
+  const real_type b1 = q[2] / q[1];
+
+  // assume r.size() >= 2
+  r[0] = (b1 - b0) / (a0 - a1);
+  r[1] = a0 * r[0] + b0;
+
+  return 0;
 }
 
 static int intersect_line_plane
-(vec3d_t* res, const vec3_t* q, const vect3_t* v, const vect3_t* w)
+(
+ const std::vector<real_type>& p,
+ const std::vector<real_type>& q,
+ std::vector<real_type>& r
+)
 {
   // intersect a line with a plane
   // res the resulting point in 3d coordinates
   // q a point of the line
   // v the line vector
-  // w a plane in implicit form
-}
+  // w a plane in explicit form
 
-#endif // TODO
+  return 0;
+}
 
 
 static int pixel_to_ray
@@ -323,14 +340,14 @@ static int pixel_to_ray
   CvMat* src = NULL;
   CvMat* dst = NULL;
 
-  src = cvCreateMat(1, 1, CV_32FC2);
+  src = cvCreateMat(1, 1, real_typeid);
   ASSERT_GOTO(src, on_error);
 
-  dst = cvCreateMat(1, 1, CV_32FC2);
+  dst = cvCreateMat(1, 1, real_typeid);
   ASSERT_GOTO(dst, on_error);
 
-  scalar.val[0] = (double)pixel.x;
-  scalar.val[1] = (double)pixel.y;
+  scalar.val[0] = (real_type)pixel.x;
+  scalar.val[1] = (real_type)pixel.y;
   cvSet1D(src, 0, scalar);
   cvUndistortPoints(src, dst, params.intrinsic, params.distortion);
 
@@ -686,7 +703,7 @@ static int fit_line
     CV_MAT_ELEM(*x, real_type, i, 1) = 1;
   }
 
-  // solve and make implicit form
+  // solve and make explicit form
   cvSolve(x, y, res, CV_SVD);
 
   const real_type a = CV_MAT_ELEM(*res, real_type, 0, 0);
@@ -797,10 +814,10 @@ static int fit_plane
 }
 
 
-__attribute__((unused))static int draw_implicit_line
+__attribute__((unused))static int draw_line
 (IplImage* image, const std::vector<real_type>& w, const CvScalar& color)
 {
-  // draw the line whose implicit form coefficients are in w[3]
+  // draw the line whose explicit form coefficients are in w[3]
   // x = (w[2] - w[1] * y) / w[0];
   // y = (w[2] - w[0] * x) / w[1];
   // to get the form y = ax + b:
@@ -904,30 +921,21 @@ static int check_shadow_lines
 )
 {
   // entering (resp. leaving) lines should intersect on the middle line
-  // w the lines implicit form coefficients
+  // w the lines explicit form coefficients
 
   // solve intersection
 
-  const real_type a0 = -vline[0] / vline[1];
-  const real_type b0 = vline[2] / vline[1];
+  std::vector<real_type> point;
+  point.resize(2);
+  if (intersect_line_line(vline, hline, point) == -1) return -1;
 
-  const real_type a1 = -hline[0] / hline[1];
-  const real_type b1 = hline[2] / hline[1];
+  // compute the corresponding point on middle line
+  const real_type a = -mline[0] / mline[1];
+  const real_type b = mline[2] / mline[1];
+  const real_type y = a * point[0] + b;
 
-  const real_type x = (b0 - b1) / (a0 - a1) * -1;
-  const real_type y = a0 * x + b0;
-
-  const real_type am = -mline[0] / mline[1];
-  const real_type bm = mline[2] / mline[1];
-
-  const real_type xm = x;
-  const real_type ym = am * xm + bm;
-
-  // compute point distance
-
-  const real_type d = sqrt(pow(xm - x, 2) + pow(ym - y, 2));
-
-  return d >= 10 ? -1 : 0;
+  // invalid if more than 10 pixels far
+  return fabs(point[1] - y) >= 10 ? -1 : 0;
 }
 
 static int estimate_shadow_lines
@@ -1012,7 +1020,7 @@ static int estimate_shadow_lines
     fit_line(shadow_points[3], line_eq);
     line_eqs.hleave.push_back(line_eq);
 
-#if 0 // plot the lines
+#if 1 // plot the lines
     {
       static const CvScalar colors[] =
       {
@@ -1029,17 +1037,17 @@ static int estimate_shadow_lines
       for (unsigned int i = 0; i < 4; ++i)
 	draw_points(cloned_image, shadow_points[i], colors[i]);
 
-      draw_implicit_line(cloned_image, line_eqs.venter.back(), colors[0]);
-      draw_implicit_line(cloned_image, line_eqs.vleave.back(), colors[1]);
-      draw_implicit_line(cloned_image, line_eqs.henter.back(), colors[2]);
-      draw_implicit_line(cloned_image, line_eqs.hleave.back(), colors[3]);
+      draw_line(cloned_image, line_eqs.venter.back(), colors[0]);
+      draw_line(cloned_image, line_eqs.vleave.back(), colors[1]);
+      draw_line(cloned_image, line_eqs.henter.back(), colors[2]);
+      draw_line(cloned_image, line_eqs.hleave.back(), colors[3]);
 
       const int res = check_shadow_lines
 	(line_eqs.venter.back(), line_eqs.henter.back(), line_eqs.middle);
       if (res == -1)
       {
 	printf("invalid shadow lines\n");
-	draw_implicit_line(cloned_image, line_eqs.middle, colors[4]);
+	draw_line(cloned_image, line_eqs.middle, colors[4]);
       }
 
       show_image(cloned_image, "ShadowLines");
