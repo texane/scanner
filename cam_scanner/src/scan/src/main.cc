@@ -67,18 +67,15 @@ static inline int seek_capture(CvCapture* cap, unsigned int n)
 
 static inline unsigned int get_capture_frame_count(CvCapture* cap)
 {
-  const double count = cvGetCaptureProperty(cap, CV_CAP_PROP_POS_FRAMES);
+  const double count = cvGetCaptureProperty(cap, CV_CAP_PROP_FRAME_COUNT);
   return (unsigned int)count;
 }
 
 static CvSize get_capture_frame_size(CvCapture* cap)
 {
   CvSize size;
-  IplImage* const frame = cvQueryFrame(cap);
-  size.width = 0;
-  size.height = 0;
-  if (frame == NULL) return size;
-  size = cvGetSize(frame);
+  size.width = (int)cvGetCaptureProperty(cap, CV_CAP_PROP_FRAME_WIDTH);
+  size.height = (int)cvGetCaptureProperty(cap, CV_CAP_PROP_FRAME_HEIGHT);
   return size;
 }
 
@@ -423,8 +420,6 @@ static int estimate_shadow_thresholds(CvCapture* cap, CvMat*& thresholds)
 
   CvMat header;
 
-  // fixme
-  rewind_capture(cap);
   const CvSize frame_size = get_capture_frame_size(cap);
   const unsigned int nrows = frame_size.height;
   const unsigned int ncols = frame_size.width;
@@ -1313,9 +1308,6 @@ static int estimate_shadow_planes
   rot_mat = cvCreateMat(3, 1, real_typeid);
   ASSERT_GOTO(rot_mat, on_error);
 
-  // allocate the shadow plane vector
-  plane_eqs.shadow_planes.resize(get_capture_frame_count(cap));
-
   // compute the camera center
   compute_camera_center(params, c);
 
@@ -1330,6 +1322,7 @@ static int estimate_shadow_planes
   henter_pos = line_eqs.henter.begin();
   hleave_pos = line_eqs.hleave.begin();
 
+  plane_eqs.shadow_planes.resize(get_capture_frame_count(cap));
   plane_pos = plane_eqs.shadow_planes.begin() + frame_index;
 
   while (1)
@@ -1388,7 +1381,7 @@ static int estimate_shadow_planes
     real4& plane = *plane_pos;
     for (unsigned int i = 0; i < 3; ++i) plane[i] = xv[i];
     v = add(plane_points[0], plane_points[1]);
-    plane[4] = dot(xv, v) / 2;
+    plane[3] = dot(xv, v) / 2;
 
     // next frame
     ++venter_pos;
@@ -1621,8 +1614,6 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   error = fit_middle_line(user_points, line_eqs.middle);
   ASSERT_GOTO(error == 0, on_error);
 
-  // fixme, rewinding should not be needed
-  rewind_capture(cap);
   frame_size = get_capture_frame_size(cap);
 
   error = fit_upper_line(frame_size, line_eqs.upper);
@@ -1649,9 +1640,9 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   error = 0;
 
  on_error:
-  if (shadow_thresholds != NULL) cvReleaseMat(&shadow_thresholds);
-  if (shadow_xtimes[0] != NULL) cvReleaseMat(&shadow_xtimes[0]);
-  if (shadow_xtimes[1] != NULL) cvReleaseMat(&shadow_xtimes[1]);
+  if (shadow_thresholds) cvReleaseMat(&shadow_thresholds);
+  if (shadow_xtimes[0]) cvReleaseMat(&shadow_xtimes[0]);
+  if (shadow_xtimes[1]) cvReleaseMat(&shadow_xtimes[1]);
 
   return error;
 }
