@@ -932,6 +932,8 @@ typedef struct plane_eqs
   real4 vplane;
   real4 hplane;
 
+  std::list<real4> shadow_planes;
+
 } plane_eqs_t;
 
 
@@ -1186,6 +1188,64 @@ static void mat_to_real3(const CvMat* m, real3& r)
 }
 
 
+template<typename type> static void zero(type& v)
+{
+  for (unsigned int i = 0; i < type::size; ++i) v[i] = 0;
+}
+
+
+template<typename type> static real_type norm(const type& v)
+{
+  real_type sum = 0;
+  for (unsigned int i = 0; i < type::size; ++i) sum += v[i] * v[i];
+  return sqrt(sum);
+}
+
+
+template<typename type> static type sub(const type& a, const type& b)
+{
+  type res;
+  for (unsigned int i = 0; i < type::size; ++i) res[i] = a[i] - b[i];
+  return res;
+}
+
+
+template<typename type> static type add(const type& a, const type& b)
+{
+  type res;
+  for (unsigned int i = 0; i < type::size; ++i) res[i] = a[i] + b[i];
+  return res;
+}
+
+
+template<typename type> static type div(const type& a, real_type b)
+{
+  type res;
+  for (unsigned int i = 0; i < type::size; ++i) res[i] = a[i] / b;
+  return res;
+}
+
+
+template<typename type> static real_type dot(const type& a, const type& b)
+{
+  // compute the dot product
+  real_type sum = 0;
+  for (unsigned int i = 0; i < type::size; ++i) sum += a[i] * b[i];
+  return sum;
+}
+
+
+template<typename type> static type cross(const type& a, const type& b)
+{
+  // compute the cross product
+  real3 p;
+  p[0] = a[1] * b[2] - b[1] * a[2];
+  p[1] = a[2] * b[0] - b[2] * a[0];
+  p[2] = a[0] * b[1] - b[0] * a[1];
+  return p;
+}
+
+
 static int estimate_shadow_planes
 (
  CvCapture* cap,
@@ -1221,13 +1281,9 @@ static int estimate_shadow_planes
   CvMat* c_mat = NULL;
 
   // uninitialized warnings
-  for (unsigned int i = 0; i < 2; ++i)
-    ll_point[i] = 0;
-
-  // uninitialized warnings
   for (unsigned int i = 0; i < 4; ++i)
-    for (unsigned int j = 0; j < 3; ++j)
-      plane_points[i][j] = 0;
+    zero(plane_points[i]);
+  zero(ll_point);
 
   ray_mat = cvCreateMat(3, 1, real_typeid);
   ASSERT_GOTO(ray_mat, on_error);
@@ -1292,17 +1348,24 @@ static int estimate_shadow_planes
     intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[3]);
 
     // compute the entering plane params from plane_points
-#if 0 // todo
-   q_v = p1_v;
-   v_v = (p2_v-p1_v)/norm(p2_v-p1_v);
-   q_h = p1_h;
-   v_h = (p2_h-p1_h)/norm(p2_h-p1_h);
-   shadowPlaneEnter(i,1:3) = cross(v_v,v_h);
-   shadowPlaneEnter(i,1:3) = shadowPlaneEnter(i,1:3)/norm(shadowPlaneEnter(i,1:3));
-   shadowPlaneEnter(i,4) = 0.5*shadowPlaneEnter(i,1:3)*(q_v+q_h);
-#endif
 
-    // store the params in plane_eqs
+    // vertical and horizontal normalized vectors
+    {
+      real3 v;
+      v = sub(plane_points[1], plane_points[0]);
+      const real3 vv = div(v, norm(v));
+      v = sub(plane_points[3], plane_points[2]);
+      const real3 hv = div(v, norm(v));
+      v = cross(vv, hv);
+      const real3 xv = div(v, norm(v));
+
+      real4 plane;
+      for (unsigned int i = 0; i < 3; ++i) plane[i] = xv[i];
+      v = add(plane_points[0], plane_points[1]);
+      plane[4] = dot(xv, v) / 2;
+
+      plane_eqs.shadow_planes.push_back(plane);
+    }
   }
 
   // success

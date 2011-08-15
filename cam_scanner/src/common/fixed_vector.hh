@@ -8,6 +8,8 @@
 template<typename T, unsigned int N>
 struct fixed_vector
 {
+  enum { size = N };
+
   T _data[N];
 
   const T& operator[](unsigned int i) const
