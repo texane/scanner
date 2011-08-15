@@ -11,6 +11,10 @@
 #include "common/cam_params.hh"
 
 
+// toremove
+#define CONFIG_SKIP_COUNT 0
+
+
 // show an image or a matrix
 
 __attribute__((unused))
@@ -359,9 +363,8 @@ static int pixel_to_ray
   for (unsigned int i = 0; i < 3; ++i)
     norm += scalar.val[i] * scalar.val[i];
 
-  ray.resize(3);
-  for (unsigned int i = 0; i < 3; ++i)
-    ray[i] = scalar.val[i] / norm;
+  // assume ray.size() >= 3
+  for (unsigned int i = 0; i < 3; ++i) ray[i] = scalar.val[i] / norm;
 
   error = 0;
 
@@ -971,9 +974,12 @@ static int estimate_shadow_lines
   hbox.y = user_points.hplane[0].y + 1;
   hbox.height = (user_points.hplane[1].y - 1) - hbox.y;
 
-  // unsigned int frame_index = 80;
-  // seek_capture(cap, frame_index);
+#if 1 // toremove
+  unsigned int frame_index = CONFIG_SKIP_COUNT;
+  seek_capture(cap, frame_index);
+#else
   rewind_capture(cap);
+#endif
 
   while (1)
   {
@@ -1020,7 +1026,7 @@ static int estimate_shadow_lines
     fit_line(shadow_points[3], line_eq);
     line_eqs.hleave.push_back(line_eq);
 
-#if 1 // plot the lines
+#if 0 // plot the lines
     {
       static const CvScalar colors[] =
       {
@@ -1160,30 +1166,70 @@ static int estimate_shadow_planes
  plane_eqs_t& plane_eqs
 )
 {
+  static const unsigned int frame_index = CONFIG_SKIP_COUNT;
+
   int error = -1;
 
-  // C = -Rc_h'*Tc_h;
+  std::list< std::vector<real_type> >::const_iterator venter_pos;
+  std::list< std::vector<real_type> >::const_iterator vleave_pos;
+  std::list< std::vector<real_type> >::const_iterator henter_pos;
+  std::list< std::vector<real_type> >::const_iterator hleave_pos;
+
+  std::vector<real_type> point;
+  std::vector<real_type> ray;
+
+  CvMat* c = NULL;
+
+  // c = -roth' * transh;
+  c = cvCreateMat(3, 1, real_typeid);
+  ASSERT_GOTO(c, on_error);
+  cvGEMM(params.roth, params.transh, -1, NULL, 0, c, CV_GEMM_A_T); 
 
   // foreach frame
   // determine true position of the lines
   // compute the shadow planes
 
+  seek_capture(cap, frame_index);
+
+  venter_pos = line_eqs.venter.begin();
+  vleave_pos = line_eqs.vleave.begin();
+  henter_pos = line_eqs.henter.begin();
+  hleave_pos = line_eqs.hleave.begin();
+
+  point.resize(2);
+  ray.resize(3);
+
+  for (; true; ++venter_pos, ++vleave_pos, ++henter_pos, ++hleave_pos)
+  {
+    IplImage* const frame_image = cvQueryFrame(cap);
+    if (frame_image == NULL) break ;
+
+    // determine vertical plane
+
+    // find the venter middle intersection
+    intersect_line_line(*venter_pos, line_eqs.middle, point);
+
+    // pixel_to_ray(point, params);
+
+    // point = intersect_line_line(venter[i], middle);
+    // ray = roth * pixel_to_ray(point, params);
+    // vplane = intersect_line_plane(C, ray)
+
+    // determine horizontal plane
+
+    // compute the entering plane params
+
+    // store the params in plane_eqs
+
+    // redo above steps for leaving plane
+
+  }
+
+  // success
   error = 0;
 
-  // determine vertical plane
-  // point = intersect_line_line(venter[i], middle);
-  // ray = roth * pixel_to_ray(point, params);
-  // vplane = intersect_line_plane(C, ray)
-
-  // determine horizontal plane
-
-  // compute the entering plane params
-
-  // store the params in plane_eqs
-
-  // redo above steps for leaving plane
-
-//  on_error:
+ on_error:
+  if (c) cvReleaseMat(&c);
 
   return error;
 }
