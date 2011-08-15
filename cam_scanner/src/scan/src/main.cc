@@ -1203,9 +1203,11 @@ static int estimate_shadow_planes
   std::list<real3>::const_iterator henter_pos;
   std::list<real3>::const_iterator hleave_pos;
 
-  // line line and line plane intersection points
+  // line line intersection point
   real2 ll_point;
-  real3 lp_point;
+
+  // shadow plane 4 points
+  real3 plane_points[4];
 
   real3 ray;
 
@@ -1219,8 +1221,13 @@ static int estimate_shadow_planes
   CvMat* c_mat = NULL;
 
   // uninitialized warnings
-  for (unsigned int i = 0; i < 2; ++i) ll_point[i] = 0;
-  for (unsigned int i = 0; i < 3; ++i) lp_point[i] = 0;
+  for (unsigned int i = 0; i < 2; ++i)
+    ll_point[i] = 0;
+
+  // uninitialized warnings
+  for (unsigned int i = 0; i < 4; ++i)
+    for (unsigned int j = 0; j < 3; ++j)
+      plane_points[i][j] = 0;
 
   ray_mat = cvCreateMat(3, 1, real_typeid);
   ASSERT_GOTO(ray_mat, on_error);
@@ -1250,30 +1257,52 @@ static int estimate_shadow_planes
     IplImage* const frame_image = cvQueryFrame(cap);
     if (frame_image == NULL) break ;
 
-    // determine vertical plane
+    // get 2 points pairs from both the (entering) vertical and
+    // horizontal lines. this is done using middle, lower and upper
+    // intersection to derive a ray. then, use intersection between
+    // and vplane (resp. hplane) to get points. these 4 points fully
+    // determine the shadow plane.
 
-    // find the venter middle intersection
     intersect_line_line(*venter_pos, line_eqs.middle, ll_point);
-
-    // intersection point to ray
     pixel_to_ray(ll_point, params, ray);
-
-    // rotate ray by roth transposed
     real3_to_mat(ray, ray_mat);
     cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_ray, CV_GEMM_A_T);
-
-    // intersect ray plane
     mat_to_real3(rot_ray, ray);
-    intersect_line_plane(c, ray, plane_eqs.vplane, lp_point);
+    intersect_line_plane(c, ray, plane_eqs.vplane, plane_points[0]);
 
-    // determine horizontal plane
+    intersect_line_line(*venter_pos, line_eqs.upper, ll_point);
+    pixel_to_ray(ll_point, params, ray);
+    real3_to_mat(ray, ray_mat);
+    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_ray, CV_GEMM_A_T);
+    mat_to_real3(rot_ray, ray);
+    intersect_line_plane(c, ray, plane_eqs.vplane, plane_points[1]);
 
-    // compute the entering plane params
+    intersect_line_line(*henter_pos, line_eqs.middle, ll_point);
+    pixel_to_ray(ll_point, params, ray);
+    real3_to_mat(ray, ray_mat);
+    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_ray, CV_GEMM_A_T);
+    mat_to_real3(rot_ray, ray);
+    intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[2]);
+
+    intersect_line_line(*henter_pos, line_eqs.lower, ll_point);
+    pixel_to_ray(ll_point, params, ray);
+    real3_to_mat(ray, ray_mat);
+    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_ray, CV_GEMM_A_T);
+    mat_to_real3(rot_ray, ray);
+    intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[3]);
+
+    // compute the entering plane params from plane_points
+#if 0 // todo
+   q_v = p1_v;
+   v_v = (p2_v-p1_v)/norm(p2_v-p1_v);
+   q_h = p1_h;
+   v_h = (p2_h-p1_h)/norm(p2_h-p1_h);
+   shadowPlaneEnter(i,1:3) = cross(v_v,v_h);
+   shadowPlaneEnter(i,1:3) = shadowPlaneEnter(i,1:3)/norm(shadowPlaneEnter(i,1:3));
+   shadowPlaneEnter(i,4) = 0.5*shadowPlaneEnter(i,1:3)*(q_v+q_h);
+#endif
 
     // store the params in plane_eqs
-
-    // redo above steps for leaving plane
-
   }
 
   // success
