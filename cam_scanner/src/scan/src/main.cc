@@ -15,6 +15,8 @@
 #define CONFIG_SKIP_COUNT 0
 
 
+// real type fixed vectors
+
 typedef fixed_vector<real_type, 2> real2;
 typedef fixed_vector<real_type, 3> real3;
 typedef fixed_vector<real_type, 4> real4;
@@ -313,20 +315,35 @@ static int intersect_line_line
   return 0;
 }
 
-static int intersect_line_plane(const real3& p, const real3& q, real4& r)
+static int intersect_line_plane
+(const real3& q, const real3& v, const real4& w, real3& p)
 {
-  // intersect a line with a plane
-  // res the resulting point in 3d coordinates
-  // q a point of the line
-  // v the line vector
-  // w a plane in explicit form
+  // given the line passing by the point q, spanning vector
+  // v, and a plane w, find p the intersecting point.
+
+  // inner products
+
+  real_type dotq = 0;
+  real_type dotv = 0;
+
+  for (unsigned int i = 0; i < 3; ++i)
+  {
+    dotq += w[i] * q[i];
+    dotv += w[i] * v[i];
+  }
+
+  // intersect
+  
+  const real_type depth = (w[3] - dotq) / dotv;
+  for (unsigned int i = 0; i < 3; ++i)
+    p[i] = q[i] + depth * v[i];
 
   return 0;
 }
 
 
 static int pixel_to_ray
-(const CvPoint& pixel, const cam_params_t& params, real3& ray)
+(const real2& pixel, const cam_params_t& params, real3& ray)
 {
   // compute the camera coorrdinates of the ray starting
   // at the camera point and passing by the given pixel.
@@ -346,8 +363,8 @@ static int pixel_to_ray
   dst = cvCreateMat(1, 1, real_typeid);
   ASSERT_GOTO(dst, on_error);
 
-  scalar.val[0] = (real_type)pixel.x;
-  scalar.val[1] = (real_type)pixel.y;
+  scalar.val[0] = pixel[0];
+  scalar.val[1] = pixel[1];
   cvSet1D(src, 0, scalar);
   cvUndistortPoints(src, dst, params.intrinsic, params.distortion);
 
@@ -368,6 +385,16 @@ static int pixel_to_ray
   if (src) cvReleaseMat(&src);
   if (dst) cvReleaseMat(&dst);
   return error;
+}
+
+
+static inline int pixel_to_ray
+(const CvPoint& pixel, const cam_params_t& params, real3& ray)
+{
+  real2 tmp;
+  tmp[0] = (real_type)pixel.x;
+  tmp[1] = (real_type)pixel.y;
+  return pixel_to_ray(tmp, params, ray);
 }
 
 
@@ -1160,15 +1187,38 @@ static int estimate_shadow_planes
   std::list<real3>::const_iterator henter_pos;
   std::list<real3>::const_iterator hleave_pos;
 
-  real2 point;
+  // line line and line plane intersection points
+  real2 ll_point;
+  real3 lp_point;
+
   real3 ray;
 
-  CvMat* c = NULL;
+  // translated ray to fit opencv routines
+  CvMat* ray_mat = NULL;
+
+  CvMat* rot_ray = NULL;
+
+  // camera center
+  real3 c;
+  CvMat* c_mat = NULL;
+
+  // uninitialized warnings
+  for (unsigned int i = 0; i < 2; ++i) ll_point[i] = 0;
+  for (unsigned int i = 0; i < 3; ++i) lp_point[i] = 0;
+
+  ray_mat = cvCreateMat(3, 1, real_typeid);
+  ASSERT_GOTO(ray_mat, on_error);
+
+  rot_ray = cvCreateMat(3, 1, real_typeid);
+  ASSERT_GOTO(rot_ray, on_error);
 
   // c = -roth' * transh;
-  c = cvCreateMat(3, 1, real_typeid);
-  ASSERT_GOTO(c, on_error);
-  cvGEMM(params.roth, params.transh, -1, NULL, 0, c, CV_GEMM_A_T); 
+  c_mat = cvCreateMat(3, 1, real_typeid);
+  ASSERT_GOTO(c_mat, on_error);
+  cvGEMM(params.roth, params.transh, -1, NULL, 0, c_mat, CV_GEMM_A_T);
+  c[0] = CV_MAT_ELEM(*c_mat, real_type, 0, 0);
+  c[1] = CV_MAT_ELEM(*c_mat, real_type, 1, 0);
+  c[2] = CV_MAT_ELEM(*c_mat, real_type, 2, 0);
 
   // foreach frame
   // determine true position of the lines
@@ -1189,13 +1239,22 @@ static int estimate_shadow_planes
     // determine vertical plane
 
     // find the venter middle intersection
-    intersect_line_line(*venter_pos, line_eqs.middle, point);
+    intersect_line_line(*venter_pos, line_eqs.middle, ll_point);
 
-    // pixel_to_ray(point, params);
+    // intersection point to ray
+    pixel_to_ray(ll_point, params, ray);
 
-    // point = intersect_line_line(venter[i], middle);
-    // ray = roth * pixel_to_ray(point, params);
-    // vplane = intersect_line_plane(C, ray)
+    // rotate ray by roth transposed
+    CV_MAT_ELEM(*ray_mat, real_type, 0, 0) = ray[0];
+    CV_MAT_ELEM(*ray_mat, real_type, 1, 0) = ray[1];
+    CV_MAT_ELEM(*ray_mat, real_type, 2, 0) = ray[2];
+    cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_ray, CV_GEMM_A_T);
+
+    // intersect ray plane
+    ray[0] = CV_MAT_ELEM(*rot_ray, real_type, 0, 0);
+    ray[1] = CV_MAT_ELEM(*rot_ray, real_type, 1, 0);
+    ray[2] = CV_MAT_ELEM(*rot_ray, real_type, 2, 0);
+    intersect_line_plane(c, ray, plane_eqs.vplane, lp_point);
 
     // determine horizontal plane
 
@@ -1211,7 +1270,9 @@ static int estimate_shadow_planes
   error = 0;
 
  on_error:
-  if (c) cvReleaseMat(&c);
+  if (c_mat) cvReleaseMat(&c_mat);
+  if (rot_ray) cvReleaseMat(&rot_ray);
+  if (ray_mat) cvReleaseMat(&ray_mat);
 
   return error;
 }
