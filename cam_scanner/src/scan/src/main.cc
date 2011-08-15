@@ -2,17 +2,22 @@
 #include <stdlib.h>
 #include <math.h>
 #include <list>
-#include <vector>
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 #include "common/assert.hh"
 #include "common/utils.hh"
 #include "common/real_type.hh"
 #include "common/cam_params.hh"
+#include "common/fixed_vector.hh"
 
 
 // toremove
 #define CONFIG_SKIP_COUNT 0
+
+
+typedef fixed_vector<real_type, 2> real2;
+typedef fixed_vector<real_type, 3> real3;
+typedef fixed_vector<real_type, 4> real4;
 
 
 // show an image or a matrix
@@ -283,11 +288,7 @@ static int get_user_points(CvCapture* cap, user_points_t& points)
 //
 
 static int intersect_line_line
-(
- const std::vector<real_type>& p,
- const std::vector<real_type>& q,
- std::vector<real_type>& r
-)
+(const real3& p, const real3& q, real2& r)
 {
   // intersect 2 coplanar lines
   // p and q the two lines in explicit forms
@@ -312,12 +313,7 @@ static int intersect_line_line
   return 0;
 }
 
-static int intersect_line_plane
-(
- const std::vector<real_type>& p,
- const std::vector<real_type>& q,
- std::vector<real_type>& r
-)
+static int intersect_line_plane(const real3& p, const real3& q, real4& r)
 {
   // intersect a line with a plane
   // res the resulting point in 3d coordinates
@@ -330,7 +326,7 @@ static int intersect_line_plane
 
 
 static int pixel_to_ray
-(const CvPoint& pixel, const cam_params_t& params, std::vector<real_type>& ray)
+(const CvPoint& pixel, const cam_params_t& params, real3& ray)
 {
   // compute the camera coorrdinates of the ray starting
   // at the camera point and passing by the given pixel.
@@ -670,8 +666,7 @@ static void get_shadow_points
 }
 
 
-static int fit_line
-(const std::list<CvPoint>& points, std::vector<real_type>& w)
+static int fit_line(const std::list<CvPoint>& points, real3& w)
 {
   // find a line that best fits points. use least square error method.
   // w contains the resulting line explicit coefficients such that:
@@ -726,8 +721,7 @@ static int fit_line
 }
 
 
-static int fit_line
-(const CvPoint points[2], std::vector<real_type>& w)
+static int fit_line(const CvPoint points[2], real3& w)
 {
   std::list<CvPoint> point_list;
   point_list.push_back(points[0]);
@@ -736,8 +730,7 @@ static int fit_line
 }
 
 
-static int fit_plane
-(const CvMat* points, std::vector<real_type>& plane)
+static int fit_plane(const CvMat* points, real4& plane)
 {
   // from cvStructuredLight/cvUtilProCam.cpp
   // points is a n x m matrix where M the dimensionality
@@ -817,8 +810,8 @@ static int fit_plane
 }
 
 
-__attribute__((unused))static int draw_line
-(IplImage* image, const std::vector<real_type>& w, const CvScalar& color)
+__attribute__((unused))
+static int draw_line(IplImage* image, const real3& w, const CvScalar& color)
 {
   // draw the line whose explicit form coefficients are in w[3]
   // x = (w[2] - w[1] * y) / w[0];
@@ -893,14 +886,14 @@ typedef struct line_eqs
 {
   // line explicit equation coefficients
 
-  std::list< std::vector<real_type> > venter;
-  std::list< std::vector<real_type> > vleave;
-  std::list< std::vector<real_type> > henter;
-  std::list< std::vector<real_type> > hleave;
+  std::list<real3> venter;
+  std::list<real3> vleave;
+  std::list<real3> henter;
+  std::list<real3> hleave;
 
-  std::vector<real_type> middle;
-  std::vector<real_type> upper;
-  std::vector<real_type> lower;
+  real3 middle;
+  real3 upper;
+  real3 lower;
 
 } line_eqs_t;
 
@@ -909,27 +902,22 @@ typedef struct plane_eqs
 {
   // plane explicit equation coefficients
 
-  std::vector<real_type> vplane;
-  std::vector<real_type> hplane;
+  real4 vplane;
+  real4 hplane;
 
 } plane_eqs_t;
 
 
 __attribute__((unused))
 static int check_shadow_lines
-(
- const std::vector<real_type>& hline,
- const std::vector<real_type>& vline,
- const std::vector<real_type>& mline
-)
+(const real3& hline, const real3& vline, const real3& mline)
 {
   // entering (resp. leaving) lines should intersect on the middle line
   // w the lines explicit form coefficients
 
   // solve intersection
 
-  std::vector<real_type> point;
-  point.resize(2);
+  real2 point;
   if (intersect_line_line(vline, hline, point) == -1) return -1;
 
   // compute the corresponding point on middle line
@@ -1011,8 +999,7 @@ static int estimate_shadow_lines
 
     // get lines equation via lse fitting method
 
-    std::vector<real_type> line_eq;
-    line_eq.resize(3);
+    real3 line_eq;
 
     fit_line(shadow_points[0], line_eq);
     line_eqs.venter.push_back(line_eq);
@@ -1105,7 +1092,6 @@ static int estimate_reference_planes
   CV_MAT_ELEM(*points, real_type, 2, 1) = 0;
   CV_MAT_ELEM(*points, real_type, 2, 2) = 0;
 
-  plane_eqs.hplane.resize(4);
   error = fit_plane(points, plane_eqs.hplane);
   ASSERT_GOTO(error == 0, on_error);
   error = -1;
@@ -1142,7 +1128,6 @@ static int estimate_reference_planes
 
   // fit the plane
 
-  plane_eqs.vplane.resize(4);
   error = fit_plane(points, plane_eqs.vplane);
   ASSERT_GOTO(error == 0, on_error);
   error = -1;
@@ -1170,13 +1155,13 @@ static int estimate_shadow_planes
 
   int error = -1;
 
-  std::list< std::vector<real_type> >::const_iterator venter_pos;
-  std::list< std::vector<real_type> >::const_iterator vleave_pos;
-  std::list< std::vector<real_type> >::const_iterator henter_pos;
-  std::list< std::vector<real_type> >::const_iterator hleave_pos;
+  std::list<real3>::const_iterator venter_pos;
+  std::list<real3>::const_iterator vleave_pos;
+  std::list<real3>::const_iterator henter_pos;
+  std::list<real3>::const_iterator hleave_pos;
 
-  std::vector<real_type> point;
-  std::vector<real_type> ray;
+  real2 point;
+  real3 ray;
 
   CvMat* c = NULL;
 
@@ -1195,9 +1180,6 @@ static int estimate_shadow_planes
   vleave_pos = line_eqs.vleave.begin();
   henter_pos = line_eqs.henter.begin();
   hleave_pos = line_eqs.hleave.begin();
-
-  point.resize(2);
-  ray.resize(3);
 
   for (; true; ++venter_pos, ++vleave_pos, ++henter_pos, ++hleave_pos)
   {
@@ -1238,15 +1220,14 @@ static int estimate_shadow_planes
 // special lines fitting routines
 
 static inline int fit_middle_line
-(const user_points_t& user_points, std::vector<real_type>& line_eq)
+(const user_points_t& user_points, real3& line_eq)
 {
-  line_eq.resize(3);
   return fit_line(user_points.mline, line_eq);
 }
 
 
 static int fit_upper_line
-(const CvSize& image_size, std::vector<real_type>& line_eq)
+(const CvSize& image_size, real3& line_eq)
 {
   CvPoint points[2];
 
@@ -1255,13 +1236,12 @@ static int fit_upper_line
   points[1].x = image_size.width;
   points[1].y = image_size.height;
 
-  line_eq.resize(3);
   return fit_line(points, line_eq);
 }
 
 
 static int fit_lower_line
-(const CvSize& image_size, std::vector<real_type>& line_eq)
+(const CvSize& image_size, real3& line_eq)
 {
   CvPoint points[2];
 
@@ -1270,7 +1250,6 @@ static int fit_lower_line
   points[1].x = image_size.width;
   points[1].y = 0;
 
-  line_eq.resize(3);
   return fit_line(points, line_eq);
 }
 
