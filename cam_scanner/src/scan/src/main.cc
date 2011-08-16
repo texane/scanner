@@ -16,6 +16,10 @@
 // toremove
 #define CONFIG_SKIP_COUNT 0
 
+// frame range used for reconstruction
+static const unsigned int first_rec_frame = 61;
+static const unsigned int last_rec_frame = 151;
+
 
 // real type fixed vectors
 
@@ -1399,12 +1403,20 @@ static int estimate_shadow_planes
     const real3& henter = line_eqs.henter[frame_index];
     real4& plane = plane_eqs.shadow_planes[frame_index];
 
+    // assume invalid
+    plane_eqs.is_valid[frame_index] = 0;
+
     // skip if line equations not found
     if (line_eqs.is_valid[frame_index] == 0)
     {
       plane_eqs.is_valid[frame_index] = 0;
       goto next_frame;
     }
+
+#if 1 // reject all other frames
+    if (frame_index < first_rec_frame || frame_index > last_rec_frame)
+      goto next_frame;
+#endif
 
     plane_eqs.is_valid[frame_index] = 1;
 
