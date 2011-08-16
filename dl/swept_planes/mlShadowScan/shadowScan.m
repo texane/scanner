@@ -252,7 +252,7 @@ for i = 1:npts
          vertices(i,:) = pEnter;
       end
    end
-   
+
    % Interpolate "leaving" shadow plane parameters (using shadow time).
    if ~isnan(shadowLeave(idx(i)))
       t  = shadowLeave(idx(i));

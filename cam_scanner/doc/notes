@@ -89,6 +89,7 @@
  . estimate_shadow_plane [?]
   . camera_center [x]
   . pixel_to_ray [?]
+   -> il faut verifier avec un programme standalone
   . intersect_line_plane [?]
 
  . reconstruct points [?]

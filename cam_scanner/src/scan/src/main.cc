@@ -1464,10 +1464,10 @@ static int estimate_shadow_planes
 
     // store the explicit plane equation
     for (unsigned int i = 0; i < 3; ++i) plane[i] = xv[i];
-    v = add(plane_points[0], plane_points[1]);
+    v = add(plane_points[0], plane_points[2]);
     plane[3] = dot(xv, v) / 2;
 
-#if 1 // debugging
+#if 0 // debugging
     {
       printf("frame_index: %u\n", frame_index);
       for (unsigned int i = 0; i < 4; ++i)
@@ -1601,7 +1601,13 @@ static int reconstruct_points
 
       // intersect ray with shadow plane
       if (intersect_line_plane(c, ray, plane, p) != -1)
+      {
+#if 0
+	static const real_type dist_reject = 20;
+	if (norm(p) > dist_reject) continue ;
+#endif
 	points.push_back(p);
+      }
 
 #if 0 // debugging
       {
