@@ -1,3 +1,7 @@
+. mesh reconstruction
+ . a post here: http://meshlabstuff.blogspot.com/search?updated-max=2009-11-03T01%3A09%3A00-08%3A00&max-results=7
+ . summarize of mesh reconstruction methods: http://lcni.uoregon.edu/~mark/Projects/Brain_casting/Point_cloud_to_mesh.html
+
 . software chain
  . in a first time, the scanning program will be implemented as a toolchain.
  In next version a gui will avoid the command line usage.
