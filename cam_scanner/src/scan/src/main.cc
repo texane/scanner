@@ -534,9 +534,33 @@ static int estimate_shadow_xtimes
   CvMat* curr_mat = NULL;
   CvMat prev_header;
   CvMat curr_header;
-  unsigned int nrows = 0;
-  unsigned int ncols = 0;
   int error = -1;
+
+  // allocate images
+  const CvSize frame_size = get_capture_frame_size(cap);
+  const unsigned int nrows = frame_size.height;
+  const unsigned int ncols = frame_size.width;
+
+  curr_image = cvCreateImage(frame_size, IPL_DEPTH_8U, 1);
+  ASSERT_GOTO(curr_image, on_error);
+  prev_image = cvCreateImage(frame_size, IPL_DEPTH_8U, 1);
+  ASSERT_GOTO(prev_image, on_error);
+
+  // retrieve corresponding matrices
+  prev_mat = cvGetMat(prev_image, &prev_header);
+  curr_mat = cvGetMat(curr_image, &curr_header);
+
+  // allocate and initialize xtime matrices
+  xtime_mat[0] = cvCreateMat(nrows, ncols, real_typeid);
+  ASSERT_GOTO(xtime_mat[0], on_error);
+  xtime_mat[1] = cvCreateMat(nrows, ncols, real_typeid);
+  ASSERT_GOTO(xtime_mat[1], on_error);
+  for (unsigned int i = 0; i < nrows; ++i)
+    for (unsigned int j = 0; j < ncols; ++j)
+    {
+      CV_MAT_ELEM(*xtime_mat[0], real_type, i, j) = not_found;
+      CV_MAT_ELEM(*xtime_mat[1], real_type, i, j) = not_found;
+    }
 
   rewind_capture(cap);
 
@@ -544,38 +568,6 @@ static int estimate_shadow_xtimes
   {
     IplImage* const frame_image = cvQueryFrame(cap);
     if (frame_image == NULL) break ;
-
-    // create on first pass
-    if (frame_index == 0)
-    {
-      CvSize size = cvGetSize(frame_image);
-
-      curr_image = cvCreateImage(size, IPL_DEPTH_8U, 1);
-      ASSERT_GOTO(curr_image, on_error);
-
-      prev_image = cvCreateImage(size, IPL_DEPTH_8U, 1);
-      ASSERT_GOTO(prev_image, on_error);
-
-      // retrieve corresponding matrices
-      prev_mat = cvGetMat(prev_image, &prev_header);
-      curr_mat = cvGetMat(curr_image, &curr_header);
-
-      // update nrows ncols
-      nrows = size.height;
-      ncols = size.width;
-
-      // allocate and initialize xtime matrices
-      xtime_mat[0] = cvCreateMat(nrows, ncols, real_typeid);
-      ASSERT_GOTO(xtime_mat[0], on_error);
-      xtime_mat[1] = cvCreateMat(nrows, ncols, real_typeid);
-      ASSERT_GOTO(xtime_mat[1], on_error);
-      for (unsigned int i = 0; i < nrows; ++i)
-	for (unsigned int j = 0; j < ncols; ++j)
-	{
-	  CV_MAT_ELEM(*xtime_mat[0], real_type, i, j) = not_found;
-	  CV_MAT_ELEM(*xtime_mat[1], real_type, i, j) = not_found;
-	}
-    }
 
     // swap prev and current before overriding
     // fixme: copy could be avoided by swapping
