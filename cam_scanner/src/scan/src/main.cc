@@ -357,10 +357,14 @@ static int pixel_to_ray
   CvMat* src = NULL;
   CvMat* dst = NULL;
 
+#if REAL_TYPE_IS_DOUBLE
+  src = cvCreateMat(1, 1, CV_64FC2);
+#else
   src = cvCreateMat(1, 1, CV_32FC2);
+#endif
   ASSERT_GOTO(src, on_error);
 
-  dst = cvCreateMat(1, 1, CV_32FC2);
+  dst = cvCreateMat(1, 1, src->type);
   ASSERT_GOTO(dst, on_error);
 
   scalar.val[0] = pixel[0];
@@ -375,9 +379,10 @@ static int pixel_to_ray
   norm = 0;
   for (unsigned int i = 0; i < 3; ++i)
     norm += scalar.val[i] * scalar.val[i];
+  norm = sqrt(norm);
 
-  // assume ray.size() >= 3
-  for (unsigned int i = 0; i < 3; ++i) ray[i] = scalar.val[i] / norm;
+  for (unsigned int i = 0; i < 3; ++i)
+    ray[i] = scalar.val[i] / norm;
 
   error = 0;
 
@@ -1408,21 +1413,10 @@ static int estimate_shadow_planes
 
     intersect_line_line(venter, line_eqs.middle, ll_point);
     pixel_to_ray(ll_point, params, ray);
-
-    printf("ray_before_rot == %s\n", to_string(ray));
-
     real3_to_mat(ray, ray_mat);
     cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
     mat_to_real3(rot_mat, ray);
-
-    printf("ray_after_rot == %s\n", to_string(ray));
-
     intersect_line_plane(c, ray, plane_eqs.vplane, plane_points[0]);
-
-    printf("venter n middle == %s\n", to_string(ll_point));
-    printf("c == %s\n", to_string(c));
-    printf("vplane == %s\n", to_string(plane_eqs.vplane));
-    printf("plane_point == %s\n", to_string(plane_points[0]));
 
     intersect_line_line(venter, line_eqs.upper, ll_point);
     pixel_to_ray(ll_point, params, ray);
@@ -1431,9 +1425,6 @@ static int estimate_shadow_planes
     mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.vplane, plane_points[1]);
 
-    printf("venter n upper == %s\n", to_string(ll_point));
-    printf("plane_point == %s\n", to_string(plane_points[1]));
-
     intersect_line_line(henter, line_eqs.middle, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
@@ -1441,31 +1432,12 @@ static int estimate_shadow_planes
     mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[2]);
 
-    printf("henter n middle == %s\n", to_string(ll_point));
-    printf("plane_point == %s\n", to_string(plane_points[2]));
-
     intersect_line_line(henter, line_eqs.lower, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
     cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
     mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[3]);
-
-    printf("henter n lower == %s\n", to_string(ll_point));
-    printf("plane_point == %s\n", to_string(plane_points[3]));
-    printf("\n");
-
-#if 0 // debugging
-    {
-      for (unsigned int i = 0; i < 4; ++i)
-      {
-	for (unsigned int j = 0; j < 4; ++j)
-	  printf(" %lf", plane_points[i][j]);
-	printf("\n");
-      }
-      printf("--\n");
-    }
-#endif // debugging
 
     // compute the entering plane params from plane_points
 
@@ -1483,6 +1455,16 @@ static int estimate_shadow_planes
     for (unsigned int i = 0; i < 3; ++i) plane[i] = xv[i];
     v = add(plane_points[0], plane_points[1]);
     plane[3] = dot(xv, v) / 2;
+
+#if 1 // debugging
+    {
+      printf("frame_index: %u\n", frame_index);
+      for (unsigned int i = 0; i < 4; ++i)
+	printf("%s\n", to_string(plane_points[i]));
+      printf("plane_eq: %s\n", to_string(plane));
+      printf("--\n");
+    }
+#endif // debugging
 
     // next frame
   next_frame:
