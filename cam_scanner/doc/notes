@@ -78,6 +78,14 @@
   -> read from matlab file
   -> get from opencv + slcalib
 
+ . user interface
+  . see in realtime what modifying a parameter does on the point cloud
+   . frame reconstruction range
+   . skip / keep frame
+   . do an acquisition, insert a frame
+   . clipping volume
+   . rejection distance ...
+   . play on calibration parameters...
 
 . checks
  . matrices from calibration [x]
