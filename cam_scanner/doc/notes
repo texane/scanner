@@ -81,6 +81,16 @@
 
 . checks
  . matrices from calibration [x]
+
  . line equations [ guess ok ]
+
  . estimtate_reference_planes: [x]
+
+ . estimate_shadow_plane [?]
+  . camera_center [x]
+  . pixel_to_ray [?]
+  . intersect_line_plane [?]
+
+ . reconstruct points [?]
+
  . final ascii output [!]
