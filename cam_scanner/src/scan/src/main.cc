@@ -20,6 +20,15 @@
 static const unsigned int first_rec_frame = 61;
 static const unsigned int last_rec_frame = 151;
 
+// the length along x (resp. y) axis between checkboards rectangles
+static const real_type dx = 558.8;
+static const real_type dy = 303.2125;
+
+// clipping volume
+static const real_type clip_x[2] = { 5, dx - 5 };
+static const real_type clip_y[2] = { 5, dy - 5 };
+static const real_type clip_z[2] = { 5, dy + 50 };
+
 
 // real type fixed vectors
 
@@ -1121,11 +1130,6 @@ static int estimate_shadow_lines
 static int estimate_reference_planes
 (CvCapture* cap, const cam_params_t& params, plane_eqs_t& plane_eqs)
 {
-  // the length along x (resp. y) axis between checkboards rectangles
-
-  static const real_type dx = 558.8;
-  static const real_type dy = 303.2125;
-
   // working matrices
 
   CvMat* points = NULL;
@@ -1607,10 +1611,17 @@ static int reconstruct_points
       // intersect ray with shadow plane
       if (intersect_line_plane(c, ray, plane, p) != -1)
       {
-#if 0
+#if 0 // filter too far
 	static const real_type dist_reject = 20;
 	if (norm(p) > dist_reject) continue ;
 #endif
+
+#if 0 // filter if not in the clipping volume
+	if ((p[0] < clip_x[0]) || (p[0] > clip_x[1])) continue ;
+	if ((p[1] < clip_y[0]) || (p[1] > clip_y[1])) continue ;
+	if ((p[2] < clip_z[0]) || (p[2] > clip_z[1])) continue ;
+#endif
+
 	points.push_back(p);
       }
 

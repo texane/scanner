@@ -86,6 +86,9 @@
    . clipping volume
    . rejection distance ...
    . play on calibration parameters...
+  . color points that are subject to a given constraints
+   -> icon: show all points
+   -> substraction between all set and constrainted point set
 
 . checks
  . matrices from calibration [x]
