@@ -1585,7 +1585,8 @@ static int reconstruct_points
 	continue ;
 
       // compute the ray equation
-      const real2 pixel = make_real2((real_type)i, (real_type)j);
+      // warning: pixel.x = j, pixel.y = i
+      const real2 pixel = make_real2((real_type)j, (real_type)i);
       pixel_to_ray(pixel, params, ray);
       real3_to_mat(ray, ray_mat);
       cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
