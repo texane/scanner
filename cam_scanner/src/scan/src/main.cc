@@ -297,12 +297,13 @@ static int intersect_line_line
   // express the 2 lines equations in the form y = ax + b
   // and solve a0 * x + b0 = a1 * x + b1
 
-  if ((p[1] == 0) || (q[1] == 0)) return -1;
+  ASSERT_RETURN(fabs(p[1]) > 0.001, -1);
+  ASSERT_RETURN(fabs(q[1]) > 0.001, -1);
 
   const real_type a0 = -p[0] / p[1];
   const real_type a1 = -q[0] / q[1];
 
-  if (fabs(a0 - a1) < 0.0001) return -1;
+  ASSERT_RETURN(fabs(a0 - a1) > 0.001, -1);
 
   const real_type b0 = p[2] / p[1];
   const real_type b1 = q[2] / q[1];
@@ -910,10 +911,13 @@ typedef struct line_eqs
 {
   // line explicit equation coefficients
 
-  std::list<real3> venter;
-  std::list<real3> vleave;
-  std::list<real3> henter;
-  std::list<real3> hleave;
+  std::vector<real3> venter;
+  std::vector<real3> vleave;
+  std::vector<real3> henter;
+  std::vector<real3> hleave;
+
+  // todo: bitmap
+  std::vector<bool> is_valid;
 
   real3 middle;
   real3 upper;
@@ -930,6 +934,9 @@ typedef struct plane_eqs
   real4 hplane;
 
   std::vector<real4> shadow_planes;
+  
+  // todo: bitmap
+  std::vector<bool> is_valid;
 
 } plane_eqs_t;
 
@@ -988,16 +995,20 @@ static int estimate_shadow_lines
   hbox.y = user_points.hplane[0].y + 1;
   hbox.height = (user_points.hplane[1].y - 1) - hbox.y;
 
-#if 1 // toremove
   unsigned int frame_index = CONFIG_SKIP_COUNT;
   seek_capture(cap, frame_index);
-#else
-  rewind_capture(cap);
-#endif
+
+  // resize the line vectors
+  const unsigned int frame_count = get_capture_frame_count(cap);
+  line_eqs.venter.resize(frame_count);
+  line_eqs.vleave.resize(frame_count);
+  line_eqs.henter.resize(frame_count);
+  line_eqs.hleave.resize(frame_count);
+  line_eqs.is_valid.resize(frame_count);
 
   while (1)
   {
-    // printf("frame_index == %u\n", frame_index++);
+    // printf("frame_index == %u\n", frame_index);
 
     IplImage* const frame_image = cvQueryFrame(cap);
     if (frame_image == NULL) break ;
@@ -1005,6 +1016,7 @@ static int estimate_shadow_lines
     // create if does not yet exist
     if (gray_image == NULL)
     {
+      // todo: move outside the loop
       gray_image = cvCreateImage(cvGetSize(frame_image), IPL_DEPTH_8U, 1);
       ASSERT_GOTO(gray_image, on_error);
       gray_mat = cvGetMat(gray_image, &header);
@@ -1023,21 +1035,24 @@ static int estimate_shadow_lines
     get_shadow_points(gray_mat, thr_mat, vbox, shadow_points + 0);
     get_shadow_points(gray_mat, thr_mat, hbox, shadow_points + 2);
 
+    // check there are at least 2 points per lines
+    for (unsigned int i = 0; i < 4; ++i)
+    {
+      if (shadow_points[i].size() < 2)
+      {
+	line_eqs.is_valid[i] = 0;
+	goto next_frame;
+      }
+    }
+
+    line_eqs.is_valid[frame_index] = 1;
+
     // get lines equation via lse fitting method
 
-    real3 line_eq;
-
-    fit_line(shadow_points[0], line_eq);
-    line_eqs.venter.push_back(line_eq);
-
-    fit_line(shadow_points[1], line_eq);
-    line_eqs.vleave.push_back(line_eq);
-
-    fit_line(shadow_points[2], line_eq);
-    line_eqs.henter.push_back(line_eq);
-
-    fit_line(shadow_points[3], line_eq);
-    line_eqs.hleave.push_back(line_eq);
+    fit_line(shadow_points[0], line_eqs.venter[frame_index]);
+    fit_line(shadow_points[1], line_eqs.vleave[frame_index]);
+    fit_line(shadow_points[2], line_eqs.henter[frame_index]);
+    fit_line(shadow_points[3], line_eqs.hleave[frame_index]);
 
 #if 0 // plot the lines
     {
@@ -1056,13 +1071,13 @@ static int estimate_shadow_lines
       for (unsigned int i = 0; i < 4; ++i)
 	draw_points(cloned_image, shadow_points[i], colors[i]);
 
-      draw_line(cloned_image, line_eqs.venter.back(), colors[0]);
-      draw_line(cloned_image, line_eqs.vleave.back(), colors[1]);
-      draw_line(cloned_image, line_eqs.henter.back(), colors[2]);
-      draw_line(cloned_image, line_eqs.hleave.back(), colors[3]);
+      draw_line(cloned_image, line_eqs.venter[frame_index], colors[0]);
+      draw_line(cloned_image, line_eqs.vleave[frame_index], colors[1]);
+      draw_line(cloned_image, line_eqs.henter[frame_index], colors[2]);
+      draw_line(cloned_image, line_eqs.hleave[frame_index], colors[3]);
 
       const int res = check_shadow_lines
-	(line_eqs.venter.back(), line_eqs.henter.back(), line_eqs.middle);
+	(line_eqs.venter[frame_index], line_eqs.henter[frame_index], line_eqs.middle);
       if (res == -1)
       {
 	printf("invalid shadow lines\n");
@@ -1073,6 +1088,9 @@ static int estimate_shadow_lines
       cvReleaseImage(&cloned_image);
     }
 #endif // plot the line
+
+  next_frame:
+    ++frame_index;
   }
 
   error = 0;
@@ -1268,16 +1286,11 @@ static int estimate_shadow_planes
  plane_eqs_t& plane_eqs
 )
 {
-  static const unsigned int frame_index = CONFIG_SKIP_COUNT;
-
   int error = -1;
 
-  std::list<real3>::const_iterator venter_pos;
-  std::list<real3>::const_iterator vleave_pos;
-  std::list<real3>::const_iterator henter_pos;
-  std::list<real3>::const_iterator hleave_pos;
+  const unsigned int frame_count = get_capture_frame_count(cap);
 
-  std::vector<real4>::iterator plane_pos;
+  unsigned int frame_index = CONFIG_SKIP_COUNT;
 
   // line line intersection point
   real2 ll_point;
@@ -1295,6 +1308,12 @@ static int estimate_shadow_planes
 
   // camera center
   real3 c;
+
+  // working vectors
+  real3 v;
+  real3 vv;
+  real3 hv;
+  real3 xv;
 
   // uninitialized warnings
   for (unsigned int i = 0; i < 4; ++i)
@@ -1317,18 +1336,27 @@ static int estimate_shadow_planes
 
   seek_capture(cap, frame_index);
 
-  venter_pos = line_eqs.venter.begin();
-  vleave_pos = line_eqs.vleave.begin();
-  henter_pos = line_eqs.henter.begin();
-  hleave_pos = line_eqs.hleave.begin();
-
-  plane_eqs.shadow_planes.resize(get_capture_frame_count(cap));
-  plane_pos = plane_eqs.shadow_planes.begin() + frame_index;
+  // allocate planes and validity map
+  plane_eqs.shadow_planes.resize(frame_count);
+  plane_eqs.is_valid.resize(frame_count);
 
   while (1)
   {
     IplImage* const frame_image = cvQueryFrame(cap);
     if (frame_image == NULL) break ;
+
+    const real3& venter = line_eqs.venter[frame_index];
+    const real3& henter = line_eqs.henter[frame_index];
+    real4& plane = plane_eqs.shadow_planes[frame_index];
+
+    // skip if line equations not found
+    if (line_eqs.is_valid[frame_index] == 0)
+    {
+      plane_eqs.is_valid[frame_index] = 0;
+      goto next_frame;
+    }
+
+    plane_eqs.is_valid[frame_index] = 1;
 
     // get 2 points pairs from both the (entering) vertical and
     // horizontal lines. this is done using middle, lower and upper
@@ -1336,59 +1364,66 @@ static int estimate_shadow_planes
     // and vplane (resp. hplane) to get points. these 4 points fully
     // determine the shadow plane.
 
-    intersect_line_line(*venter_pos, line_eqs.middle, ll_point);
+    intersect_line_line(venter, line_eqs.middle, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
     cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
     mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.vplane, plane_points[0]);
 
-    intersect_line_line(*venter_pos, line_eqs.upper, ll_point);
+    intersect_line_line(venter, line_eqs.upper, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
     cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
     mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.vplane, plane_points[1]);
 
-    intersect_line_line(*henter_pos, line_eqs.middle, ll_point);
+    intersect_line_line(henter, line_eqs.middle, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
     cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
     mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[2]);
 
-    intersect_line_line(*henter_pos, line_eqs.lower, ll_point);
+    intersect_line_line(henter, line_eqs.lower, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
     cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
     mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[3]);
 
+#if 1 // debugging
+    {
+      for (unsigned int i = 0; i < 4; ++i)
+      {
+	for (unsigned int j = 0; j < 4; ++j)
+	  printf(" %lf", plane_points[i][j]);
+	printf("\n");
+      }
+      printf("--\n");
+    }
+#endif // debugging
+
     // compute the entering plane params from plane_points
 
     // vertical and horizontal normalized vectors
-    real3 v;
     v = sub(plane_points[1], plane_points[0]);
-    const real3 vv = div(v, norm(v));
+    vv = div(v, norm(v));
     v = sub(plane_points[3], plane_points[2]);
-    const real3 hv = div(v, norm(v));
+    hv = div(v, norm(v));
 
     // normalized cross product
     v = cross(vv, hv);
-    const real3 xv = div(v, norm(v));
+    xv = div(v, norm(v));
 
     // store the explicit plane equation
-    real4& plane = *plane_pos;
     for (unsigned int i = 0; i < 3; ++i) plane[i] = xv[i];
     v = add(plane_points[0], plane_points[1]);
     plane[3] = dot(xv, v) / 2;
 
     // next frame
-    ++venter_pos;
-    ++vleave_pos;
-    ++henter_pos;
-    ++hleave_pos;
-    ++plane_pos;
+  next_frame:
+    ++frame_index;
   }
 
   // success
@@ -1474,7 +1509,6 @@ static int reconstruct_points
       // the entering times, t1 <= t < t2
       const real_type t = CV_MAT_ELEM(*xtimes_mat, real_type, i, j);
       const real_type t1 = floor(t);
-      const real_type t2 = t1 + 1;
 
       // no xtime for this pixel
       if (t == not_found) continue ;
@@ -1488,6 +1522,12 @@ static int reconstruct_points
 	continue ;
       }
 
+      // skip frames that have no equation for the shadow plane
+      if (plane_eqs.is_valid[frame_index] == 0)
+	continue ;
+      else if (plane_eqs.is_valid[frame_index + 1] == 0)
+	continue ;
+
       // compute the ray equation
       const real2 pixel = make_real2((real_type)i, (real_type)j);
       pixel_to_ray(pixel, params, ray);
@@ -1495,8 +1535,8 @@ static int reconstruct_points
       cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
       mat_to_real3(rot_mat, ray);
 
-      // average plane coefficients at t1 and t2
-      const real_type alpha = (t - t1) / (t2 - t1);
+      // average plane coefficients
+      const real_type alpha = t - t1;
       const real4& t1_plane = plane_eqs.shadow_planes[frame_index + 0];
       const real4& t2_plane = plane_eqs.shadow_planes[frame_index + 1];
       real4 plane;
@@ -1504,9 +1544,21 @@ static int reconstruct_points
 	plane[i] = (1 - alpha) * t1_plane[i] + alpha * t2_plane[i];
 
       // intersect ray with shadow plane
-      if (intersect_line_plane(c, ray, plane, p) == -1) continue ;
+      if (intersect_line_plane(c, ray, plane, p) != -1)
+	points.push_back(p);
 
-      points.push_back(p);
+#if 0 // debugging
+      {
+	printf("c: "); for (unsigned int i = 0; i < 3; ++i) printf(" %lf", c[i]);
+	printf("\n");
+	printf("ray: "); for (unsigned int i = 0; i < 3; ++i) printf(" %lf", ray[i]);
+	printf("\n");
+	printf("plane: "); for (unsigned int i = 0; i < 4; ++i) printf(" %lf", plane[i]);
+	printf("\n");
+	printf("p: "); for (unsigned int i = 0; i < 4; ++i) printf(" %lf", p[i]);
+	printf("\n");
+      }
+#endif // debugging
     }
 
   // success
