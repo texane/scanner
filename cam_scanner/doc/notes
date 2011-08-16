@@ -102,7 +102,9 @@
   . pixel_to_ray [?]
    -> il faut verifier avec un programme standalone
   . intersect_line_plane [?]
+   -> seems ok
 
  . reconstruct points [?]
+  . ssems to work
 
  . final ascii output [!]

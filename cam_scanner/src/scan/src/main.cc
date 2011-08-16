@@ -29,6 +29,10 @@ static const real_type clip_x[2] = { 5, dx - 5 };
 static const real_type clip_y[2] = { 5, dy - 5 };
 static const real_type clip_z[2] = { 5, dy + 50 };
 
+// shadows cannot be detected on dark areas. use minimum contrast
+// to account for those regions.
+static const unsigned int min_contrast = 50;
+
 
 // real type fixed vectors
 
@@ -450,7 +454,12 @@ static inline int pixel_to_ray
 
 // shadow threshold estimtation
 
-static int estimate_shadow_thresholds(CvCapture* cap, CvMat*& thresholds)
+static int estimate_shadow_thresholds
+(
+ CvCapture* cap,
+ CvMat*& thresholds,
+ CvMat*& contrasts
+)
 {
   // estimate invdiviual pixels shadow threshold
   // algorithm:
@@ -524,10 +533,13 @@ static int estimate_shadow_thresholds(CvCapture* cap, CvMat*& thresholds)
     // dont release frame_image
   }
 
-  // create and get threshold
+  // create threshold and contrast matrices
 
   thresholds = cvCreateMat(nrows, ncols, CV_8UC1);
   ASSERT_GOTO(thresholds, on_error);
+
+  contrasts = cvCreateMat(nrows, ncols, CV_8UC1);
+  ASSERT_GOTO(contrasts, on_error);
 
   for (unsigned int i = 0; i < nrows; ++i)
     for (unsigned int j = 0; j < ncols; ++j)
@@ -535,6 +547,7 @@ static int estimate_shadow_thresholds(CvCapture* cap, CvMat*& thresholds)
       const int minval = CV_MAT_ELEM(*minvals, int, i, j);
       const int maxval = CV_MAT_ELEM(*maxvals, int, i, j);
       CV_MAT_ELEM(*thresholds, unsigned char, i, j) = (minval + maxval) / 2;
+      CV_MAT_ELEM(*contrasts, unsigned char, i, j) = maxval - minval;
     }
 
   // success
@@ -545,14 +558,22 @@ static int estimate_shadow_thresholds(CvCapture* cap, CvMat*& thresholds)
   if (maxvals) cvReleaseMat(&maxvals);
   if (gray_image) cvReleaseImage(&gray_image);
 
-  if ((error == -1) && thresholds)
-    cvReleaseMat(&thresholds);
+  if (error == -1)
+  {
+    if (thresholds) cvReleaseMat(&thresholds);
+    if (contrasts) cvReleaseMat(&contrasts);
+  }
 
   return error;
 }
 
 static int estimate_shadow_xtimes
-(CvCapture* cap, const CvMat* thr_mat, CvMat* xtime_mat[2])
+(
+ CvCapture* cap,
+ const CvMat* thr_mat,
+ const CvMat* contrast_mat,
+ CvMat* xtime_mat[2]
+)
 {
   // estimate the per pixel shadow crossing times, where time is
   // (roughly) the frame index. a pixel is considered entered
@@ -648,6 +669,18 @@ static int estimate_shadow_xtimes
 	}
       }
   }
+
+  // apply minimum contrast filter
+  for (unsigned int i = 0; i < nrows; ++i)
+    for (unsigned int j = 0; j < ncols; ++j)
+      for (unsigned int k = 0; k < 2; ++k)
+	if (CV_MAT_ELEM(*xtime_mat[k], real_type, i, j) != not_found)
+	{
+	  const unsigned int contrast =
+	    CV_MAT_ELEM(*contrast_mat, unsigned char, i, j);
+	  if (contrast < min_contrast)
+	    CV_MAT_ELEM(*xtime_mat[k], real_type, i, j) = not_found;
+	}
 
 #if 0 // plot (entering) shadow xtimes
   {
@@ -1600,12 +1633,9 @@ static int reconstruct_points
 
       const unsigned int frame_index = (unsigned int)t1;
 
-      // debugging, work on both frame_index and frame_index + 1
+      // possible to get out of bounds
       if ((frame_index + 1) >= plane_eqs.shadow_planes.size())
-      {
-	printf("invalid frame_index == %u\n", frame_index);
 	continue ;
-      }
 
       // skip frames that have no equation for the shadow plane
       if (plane_eqs.is_valid[frame_index] == 0)
@@ -1740,6 +1770,7 @@ static int fit_lower_line
 static int do_scan(CvCapture* cap, const cam_params_t& params)
 {
   int error = -1;
+  CvMat* shadow_contrasts = NULL;
   CvMat* shadow_thresholds = NULL;
   CvMat* shadow_xtimes[2] = { NULL, NULL };
   user_points_t user_points;
@@ -1754,12 +1785,13 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
 
   // print_user_points(user_points);
 
-  error = estimate_shadow_thresholds(cap, shadow_thresholds);
+  error = estimate_shadow_thresholds(cap, shadow_thresholds, shadow_contrasts);
   ASSERT_GOTO(error == 0, on_error);
 
   // show_matrix(shadow_thresholds);
 
-  error = estimate_shadow_xtimes(cap, shadow_thresholds, shadow_xtimes);
+  error = estimate_shadow_xtimes
+    (cap, shadow_thresholds, shadow_contrasts, shadow_xtimes);
   ASSERT_GOTO(error == 0, on_error);  
 
   error = fit_middle_line(user_points, line_eqs.middle);
@@ -1791,6 +1823,7 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   error = 0;
 
  on_error:
+  if (shadow_contrasts) cvReleaseMat(&shadow_contrasts);
   if (shadow_thresholds) cvReleaseMat(&shadow_thresholds);
   if (shadow_xtimes[0]) cvReleaseMat(&shadow_xtimes[0]);
   if (shadow_xtimes[1]) cvReleaseMat(&shadow_xtimes[1]);
