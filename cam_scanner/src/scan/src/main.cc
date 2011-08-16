@@ -356,6 +356,8 @@ static int pixel_to_ray
   CvScalar scalar;
   CvMat* src = NULL;
   CvMat* dst = NULL;
+  real2 fc;
+  real2 cc;
 
 #if REAL_TYPE_IS_DOUBLE
   src = cvCreateMat(1, 1, CV_64FC2);
@@ -367,15 +369,24 @@ static int pixel_to_ray
   dst = cvCreateMat(1, 1, src->type);
   ASSERT_GOTO(dst, on_error);
 
-  scalar.val[0] = pixel[0];
-  scalar.val[1] = pixel[1];
+  // retrieve focal length and principal point from intrinsic
+  fc[0] = CV_MAT_ELEM(*params.intrinsic, real_type, 0, 0);
+  fc[1] = CV_MAT_ELEM(*params.intrinsic, real_type, 1, 1);
+  cc[0] = CV_MAT_ELEM(*params.intrinsic, real_type, 0, 2);
+  cc[1] = CV_MAT_ELEM(*params.intrinsic, real_type, 1, 2);
+
+  // recenter on cc and divide fc
+  scalar.val[0] = (pixel[0] - cc[0]) / fc[0];
+  scalar.val[1] = (pixel[1] - cc[1]) / fc[1];
+
+  // undistort
   cvSet1D(src, 0, scalar);
   cvUndistortPoints(src, dst, params.intrinsic, params.distortion);
 
+  // assign z == 1 and normalize
   scalar = cvGet1D(dst, 0);
   scalar.val[2] = 1;
 
-  // normalize and assign
   norm = 0;
   for (unsigned int i = 0; i < 3; ++i)
     norm += scalar.val[i] * scalar.val[i];
