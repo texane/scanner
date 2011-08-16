@@ -156,6 +156,9 @@ hPlane = fitPlane(X(1,:),X(2,:),X(3,:))';
 X = Rc_h'*(Rc_v*X + repmat(Tc_v-Tc_h,1,size(X,2)));
 vPlane = fitPlane(X(1,:),X(2,:),X(3,:))';
 
+hPlane
+vPlane
+
 % Calculate camera center (in "horizontal" reference coordinate system).
 C = -Rc_h'*Tc_h;
 

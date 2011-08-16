@@ -758,7 +758,7 @@ static int fit_line(const CvPoint points[2], real3& w)
 static int fit_plane(const CvMat* points, real4& plane)
 {
   // from cvStructuredLight/cvUtilProCam.cpp
-  // points is a n x m matrix where M the dimensionality
+  // points is a n x m matrix where m the dimensionality
 
   int error = -1;
 
@@ -781,8 +781,12 @@ static int fit_plane(const CvMat* points, real4& plane)
   for (int c = 0; c < ncols; ++c)
   {
     for (int r = 0; r < nrows; ++r)
-      centroid->data.fl[c] += points->data.fl[ncols * r + c];
-    centroid->data.fl[c] /= nrows;
+    {
+      CV_MAT_ELEM(*centroid, real_type, 0, c) +=
+	CV_MAT_ELEM(*points, real_type, r, c);
+    }
+
+    CV_MAT_ELEM(*centroid, real_type, 0, c) /= nrows;
   }
 
   // subtract geometric centroid from each point
@@ -793,8 +797,9 @@ static int fit_plane(const CvMat* points, real4& plane)
   for (int r = 0; r < nrows; ++r)
     for (int c = 0; c < ncols; ++c)
     {
-      points2->data.fl[ncols * r + c] =
-	points->data.fl[ncols * r + c] - centroid->data.fl[c];
+      CV_MAT_ELEM(*points2, real_type, r, c) =
+	CV_MAT_ELEM(*points, real_type, r, c) -
+	CV_MAT_ELEM(*centroid, real_type, 0, c);
     }
 	
   // evaluate SVD of covariance matrix
@@ -817,8 +822,8 @@ static int fit_plane(const CvMat* points, real4& plane)
   plane[ncols] = 0;
   for (int c = 0; c < ncols; ++c)
   {
-    plane[c] = V->data.fl[ncols * (ncols - 1) + c];
-    plane[ncols] += plane[c] * centroid->data.fl[c];
+    plane[c] = CV_MAT_ELEM(*V, real_type, ncols - 1, c);
+    plane[ncols] += plane[c] * CV_MAT_ELEM(*centroid, real_type, 0, c);
   }
 
   error = 0;
@@ -1114,27 +1119,32 @@ static int estimate_reference_planes
   CvMat* points = NULL;
   CvMat* tsub = NULL;
   CvMat* tmp = NULL;
+  CvMat* transposed = NULL;
 
   // resulting error
 
   int error = -1;
 
-  // create and assign a points matrix
+  // create the four reference points matrix
 
-  points = cvCreateMat(3, 3, real_typeid);
+  points = cvCreateMat(4, 3, real_typeid);
   ASSERT_GOTO(points, on_error);
 
   CV_MAT_ELEM(*points, real_type, 0, 0) = 0;
-  CV_MAT_ELEM(*points, real_type, 0, 1) = dx;
-  CV_MAT_ELEM(*points, real_type, 0, 2) = dx;
+  CV_MAT_ELEM(*points, real_type, 0, 1) = 0;
+  CV_MAT_ELEM(*points, real_type, 0, 2) = 0;
 
-  CV_MAT_ELEM(*points, real_type, 1, 0) = 0;
+  CV_MAT_ELEM(*points, real_type, 1, 0) = dx;
   CV_MAT_ELEM(*points, real_type, 1, 1) = 0;
-  CV_MAT_ELEM(*points, real_type, 1, 2) = dy;
+  CV_MAT_ELEM(*points, real_type, 1, 2) = 0;
 
-  CV_MAT_ELEM(*points, real_type, 2, 0) = 0;
-  CV_MAT_ELEM(*points, real_type, 2, 1) = 0;
+  CV_MAT_ELEM(*points, real_type, 2, 0) = dx;
+  CV_MAT_ELEM(*points, real_type, 2, 1) = dy;
   CV_MAT_ELEM(*points, real_type, 2, 2) = 0;
+
+  CV_MAT_ELEM(*points, real_type, 3, 0) = 0;
+  CV_MAT_ELEM(*points, real_type, 3, 1) = dy;
+  CV_MAT_ELEM(*points, real_type, 3, 2) = 0;
 
   error = fit_plane(points, plane_eqs.hplane);
   ASSERT_GOTO(error == 0, on_error);
@@ -1150,8 +1160,10 @@ static int estimate_reference_planes
   cvSub(params.transv, params.transh, tmp);
 
   // tsub = repmat(tmp, 1, size(x, 2));
+  // tsub is the translation vector repeated once per point. thus
+  // column count is points->row.
 
-  tsub = cvCreateMat(params.transv->rows, points->cols, params.transv->type);
+  tsub = cvCreateMat(params.transv->rows, points->rows, params.transv->type);
   ASSERT_GOTO(tsub, on_error);
 
   for (int i = 0; i < tsub->rows; ++i)
@@ -1161,17 +1173,28 @@ static int estimate_reference_planes
   cvReleaseMat(&tmp);
 
   // tmp = rotv * x + tsub;
+  // tmp is a m x n matrix where m the dimensionnality and n
+  // the point count. note that points have to be transposed
+  // here. this is due to fit_plane requiring a differently
+  // ordered matrix.
 
-  tmp = cvCreateMat(params.rotv->rows, points->cols, points->type);
+  tmp = cvCreateMat(tsub->rows, tsub->cols, points->type);
   ASSERT_GOTO(tmp, on_error);
-  cvGEMM(params.rotv, points, 1, tsub, 1, tmp, 0);
+  cvGEMM(params.rotv, points, 1, tsub, 1, tmp, CV_GEMM_B_T);
 
   // x = roth' * tmp;
+  // note the points need to be transposed, refer to the above
+  // comment, we use the transposed temporary matrix.
 
-  cvGEMM(params.roth, tmp, 1, NULL, 0, points, CV_GEMM_A_T);
+  transposed = cvCreateMat(points->cols, points->rows, points->type);
+  ASSERT_GOTO(transposed, on_error);
+
+  cvGEMM(params.roth, tmp, 1, NULL, 0, transposed, CV_GEMM_A_T);
+
+  // recast to points
+  cvTranspose(transposed, points);
 
   // fit the plane
-
   error = fit_plane(points, plane_eqs.vplane);
   ASSERT_GOTO(error == 0, on_error);
   error = -1;
@@ -1182,6 +1205,7 @@ static int estimate_reference_planes
   if (points) cvReleaseMat(&points);
   if (tmp) cvReleaseMat(&tmp);
   if (tsub) cvReleaseMat(&tsub);
+  if (transposed) cvReleaseMat(&transposed);
 
   return error;
 }
@@ -1258,6 +1282,24 @@ template<typename type> static type cross(const type& a, const type& b)
   p[1] = a[2] * b[0] - b[2] * a[0];
   p[2] = a[0] * b[1] - b[0] * a[1];
   return p;
+}
+
+
+template<typename type> static const char* to_string(const type& v)
+{
+  static std::string s;
+
+  char buf[64];
+
+  s.clear();
+
+  for (unsigned int i = 0; i < type::size; ++i)
+  {
+    sprintf(buf, " %lf", v[i]);
+    s.append(buf);
+  }
+
+  return s.c_str();
 }
 
 
@@ -1366,10 +1408,21 @@ static int estimate_shadow_planes
 
     intersect_line_line(venter, line_eqs.middle, ll_point);
     pixel_to_ray(ll_point, params, ray);
+
+    printf("ray_before_rot == %s\n", to_string(ray));
+
     real3_to_mat(ray, ray_mat);
     cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
     mat_to_real3(rot_mat, ray);
+
+    printf("ray_after_rot == %s\n", to_string(ray));
+
     intersect_line_plane(c, ray, plane_eqs.vplane, plane_points[0]);
+
+    printf("venter n middle == %s\n", to_string(ll_point));
+    printf("c == %s\n", to_string(c));
+    printf("vplane == %s\n", to_string(plane_eqs.vplane));
+    printf("plane_point == %s\n", to_string(plane_points[0]));
 
     intersect_line_line(venter, line_eqs.upper, ll_point);
     pixel_to_ray(ll_point, params, ray);
@@ -1378,12 +1431,18 @@ static int estimate_shadow_planes
     mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.vplane, plane_points[1]);
 
+    printf("venter n upper == %s\n", to_string(ll_point));
+    printf("plane_point == %s\n", to_string(plane_points[1]));
+
     intersect_line_line(henter, line_eqs.middle, ll_point);
     pixel_to_ray(ll_point, params, ray);
     real3_to_mat(ray, ray_mat);
     cvGEMM(params.roth, ray_mat, 1, NULL, 0, rot_mat, CV_GEMM_A_T);
     mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[2]);
+
+    printf("henter n middle == %s\n", to_string(ll_point));
+    printf("plane_point == %s\n", to_string(plane_points[2]));
 
     intersect_line_line(henter, line_eqs.lower, ll_point);
     pixel_to_ray(ll_point, params, ray);
@@ -1392,7 +1451,11 @@ static int estimate_shadow_planes
     mat_to_real3(rot_mat, ray);
     intersect_line_plane(c, ray, plane_eqs.hplane, plane_points[3]);
 
-#if 1 // debugging
+    printf("henter n lower == %s\n", to_string(ll_point));
+    printf("plane_point == %s\n", to_string(plane_points[3]));
+    printf("\n");
+
+#if 0 // debugging
     {
       for (unsigned int i = 0; i < 4; ++i)
       {

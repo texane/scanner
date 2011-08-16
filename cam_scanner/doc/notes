@@ -77,3 +77,10 @@
  . how to calibration
   -> read from matlab file
   -> get from opencv + slcalib
+
+
+. checks
+ . matrices from calibration [x]
+ . line equations [ guess ok ]
+ . estimtate_reference_planes: [x]
+ . final ascii output [!]
