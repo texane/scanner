@@ -1,6 +1,10 @@
 . mesh reconstruction
  . a post here: http://meshlabstuff.blogspot.com/search?updated-max=2009-11-03T01%3A09%3A00-08%3A00&max-results=7
  . summarize of mesh reconstruction methods: http://lcni.uoregon.edu/~mark/Projects/Brain_casting/Point_cloud_to_mesh.html
+ . papers on mesh reconstruction: http://www.cs.jhu.edu/~misha/
+ . http://wiki.mcneel.com/labs/pointsetreconstruction
+ . http://www.cgal.org/Manual/latest/doc_html/cgal_manual/Surface_reconstruction_points_3/Chapter_main.html
+  . normal reconstruction: http://www.cgal.org/Manual/latest/doc_html/cgal_manual/Point_set_processing_3/Chapter_main.html#chap:point_set_processing_3
 
 . software chain
  . in a first time, the scanning program will be implemented as a toolchain.
@@ -93,6 +97,12 @@
   . color points that are subject to a given constraints
    -> icon: show all points
    -> substraction between all set and constrainted point set
+
+ . meshlab plugin
+  . lot of code redundant if
+
+ . dont use std::list for point reconstruction. their number is known from
+ the previous pass.
 
 . checks
  . matrices from calibration [x]
