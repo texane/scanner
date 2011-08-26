@@ -15,6 +15,19 @@
 
 // toremove
 #define CONFIG_SKIP_COUNT 0
+#define CONFIG_HERCULES 1
+
+#if CONFIG_HERCULES
+
+// frame range used for reconstruction
+static const unsigned int first_rec_frame = 0;
+static const unsigned int last_rec_frame = 21;
+
+// the length along x (resp. y) axis between checkboards rectangles
+static const real_type dx = 250;
+static const real_type dy = 200;
+
+#else
 
 // frame range used for reconstruction
 static const unsigned int first_rec_frame = 61;
@@ -23,6 +36,8 @@ static const unsigned int last_rec_frame = 151;
 // the length along x (resp. y) axis between checkboards rectangles
 static const real_type dx = 558.8;
 static const real_type dy = 303.2125;
+
+#endif
 
 // clipping volume
 static const real_type clip_x[2] = { 5, dx - 5 };
@@ -94,6 +109,13 @@ static CvSize get_capture_frame_size(CvCapture* cap)
   size.width = (int)cvGetCaptureProperty(cap, CV_CAP_PROP_FRAME_WIDTH);
   size.height = (int)cvGetCaptureProperty(cap, CV_CAP_PROP_FRAME_HEIGHT);
   return size;
+}
+
+static inline int set_capture_frame_size(CvCapture* cap, CvSize size)
+{
+  cvSetCaptureProperty(cap, CV_CAP_PROP_FRAME_WIDTH, size.width);
+  cvSetCaptureProperty(cap, CV_CAP_PROP_FRAME_HEIGHT, size.height);
+  return 0;
 }
 
 
@@ -182,7 +204,50 @@ static int get_static_user_points(user_points_t& points)
   return 0;
 }
 
-#else // home scene configuration
+#elif CONFIG_HERCULES // hercules scene configuration
+
+__attribute__((unused))
+static int get_static_user_points(user_points_t& points)
+{
+  // got from a previous run, lowres image
+
+  points.mline[0].x = 138;
+  points.mline[0].y = 297;
+  points.mline[1].x = 512;
+  points.mline[1].y = 290;
+
+  points.vplane[0].x = 243;
+  points.vplane[0].y = 22;
+  points.vplane[1].x = 447;
+  points.vplane[1].y = 234;
+
+  points.hplane[0].x = 172;
+  points.hplane[0].y = 413;
+  points.hplane[1].x = 467;
+  points.hplane[1].y = 462;
+
+  points.vcorner[0].x = 86;
+  points.vcorner[0].y = 441;
+  points.vcorner[1].x = 544;
+  points.vcorner[1].y = 442;
+  points.vcorner[2].x = 497;
+  points.vcorner[2].y = 316;
+  points.vcorner[3].x = 158;
+  points.vcorner[3].y = 319;
+
+  points.hcorner[0].x = 189;
+  points.hcorner[0].y = 229;
+  points.hcorner[1].x = 496;
+  points.hcorner[1].y = 225;
+  points.hcorner[2].x = 498;
+  points.hcorner[2].y = 38;
+  points.hcorner[3].x = 188;
+  points.hcorner[3].y = 45;
+
+  return 0;
+}
+
+#else // quickcam scene configuration
 
 __attribute__((unused))
 static int get_static_user_points(user_points_t& points)
