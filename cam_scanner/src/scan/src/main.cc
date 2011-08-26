@@ -139,6 +139,8 @@ static void print_user_points(user_points_t& points)
   print_point_array(points.hcorner, 4);
 }
 
+#if 0 // swept_plane scene configuration
+
 __attribute__((unused))
 static int get_static_user_points(user_points_t& points)
 {
@@ -179,6 +181,51 @@ static int get_static_user_points(user_points_t& points)
 
   return 0;
 }
+
+#else // home scene configuration
+
+__attribute__((unused))
+static int get_static_user_points(user_points_t& points)
+{
+  // got from a previous run, lowres image
+
+  points.mline[0].x = 72;
+  points.mline[0].y = 145;
+  points.mline[1].x = 267;
+  points.mline[1].y = 145;
+
+  points.vplane[0].x = 140;
+  points.vplane[0].y = 13;
+  points.vplane[1].x = 213;
+  points.vplane[1].y = 64;
+
+  points.hplane[0].x = 122;
+  points.hplane[0].y = 187;
+  points.hplane[1].x = 213;
+  points.hplane[1].y = 217;
+
+  points.vcorner[0].x = 71;
+  points.vcorner[0].y = 212;
+  points.vcorner[1].x = 290;
+  points.vcorner[1].y = 211;
+  points.vcorner[2].x = 254;
+  points.vcorner[2].y = 155;
+  points.vcorner[3].x = 93;
+  points.vcorner[3].y = 155;
+
+  points.hcorner[0].x = 100;
+  points.hcorner[0].y = 115;
+  points.hcorner[1].x = 244;
+  points.hcorner[1].y = 114;
+  points.hcorner[2].x = 251;
+  points.hcorner[2].y = 22;
+  points.hcorner[3].x = 96;
+  points.hcorner[3].y = 27;
+
+  return 0;
+}
+
+#endif
 
 typedef struct on_mouse_state
 {
@@ -1134,7 +1181,7 @@ static int estimate_shadow_lines
     fit_line(shadow_points[2], line_eqs.henter[frame_index]);
     fit_line(shadow_points[3], line_eqs.hleave[frame_index]);
 
-#if 0 // plot the lines
+#if 1 // plot the lines
     {
       static const CvScalar colors[] =
       {
@@ -1780,6 +1827,7 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
   std::list<real3> points;
 
   // error = get_user_points(cap, user_points);
+  // print_user_points(user_points);
   error = get_static_user_points(user_points);
   ASSERT_GOTO(error == 0, on_error);
 
@@ -1792,7 +1840,7 @@ static int do_scan(CvCapture* cap, const cam_params_t& params)
 
   error = estimate_shadow_xtimes
     (cap, shadow_thresholds, shadow_contrasts, shadow_xtimes);
-  ASSERT_GOTO(error == 0, on_error);  
+  ASSERT_GOTO(error == 0, on_error);
 
   error = fit_middle_line(user_points, line_eqs.middle);
   ASSERT_GOTO(error == 0, on_error);

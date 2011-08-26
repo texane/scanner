@@ -1,0 +1,432 @@
+#include <cstdio>
+#include <cstdlib>
+#include <unistd.h>
+#include <math.h>
+#include <sys/stat.h>
+#include <string>
+#include <cv.h>
+#include <highgui.h>
+#include "cvStructuredLight.hh"
+#include "cvCalibrateProCam.hh"
+#include "cvUtilProCam.hh"
+
+
+#define ASSERT_RETURN(__c, __n)			\
+if (!(__c))					\
+{						\
+  printf("[ASSERTION_FAILED]: %s\n", #__c);	\
+  return __n;					\
+}
+
+
+#define ASSERT_GOTO(__c, __l)			\
+if (!(__c))					\
+{						\
+  printf("[ASSERTION_FAILED]: %s\n", #__c);	\
+  goto __l;					\
+}
+
+
+// CvCapture helpers
+
+static std::string make_indexed_name(const std::string& dirname, unsigned int i)
+{
+  char namebuf[1024];
+  snprintf(namebuf, sizeof(namebuf), "%s/%06u.jpg", dirname.c_str(), i);
+  return std::string(namebuf);
+}
+
+static int create_avi(const std::string& dirname, const std::string& aviname)
+{
+  // return -1 on error
+  // assume filename: dirname/012345.jpg
+
+  // open the first image to get parameters
+  std::string imname;
+  imname = make_indexed_name(dirname, 1);
+  IplImage* iplimage = cvLoadImage(imname.c_str());
+  if (iplimage == NULL) return -1;
+  CvSize imsize;
+  imsize.width = iplimage->width;
+  imsize.height = iplimage->height;
+  cvReleaseImage(&iplimage);
+
+  CvVideoWriter* writer = cvCreateVideoWriter
+    (aviname.c_str(), CV_FOURCC('P','I','M','1'), 1, imsize, true);
+
+  if (writer == NULL) return -1;
+
+  for (unsigned int i = 1; true; ++i)
+  {
+    imname = make_indexed_name(dirname, i);
+    iplimage = cvLoadImage(imname.c_str());
+    if (iplimage == NULL) break ;
+    cvWriteFrame(writer, iplimage);
+    cvReleaseImage(&iplimage);
+  }
+
+  cvReleaseVideoWriter(&writer);
+
+  return 0;
+}
+
+static CvCapture* avi_to_capture(const std::string& aviname)
+{
+  CvCapture* const cap = cvCreateFileCapture(aviname.c_str());
+  if (cap == NULL) return NULL;
+  return cap;
+}
+
+static inline bool is_file(const std::string& name)
+{
+  struct stat buf;
+  return stat(name.c_str(), &buf) != -1;
+}
+
+static CvCapture* directory_to_capture(const std::string& dirname)
+{
+  // create a capture from a directory
+  // assume filename: dirname/012345.jpg
+  // may create a video dirname/all.avi
+
+  std::string aviname = dirname + std::string("/all.avi");
+  if (is_file(aviname) == false)
+  {
+    if (create_avi(dirname, aviname) == -1)
+      return NULL;
+  }
+
+  return avi_to_capture(aviname);
+}
+
+
+//
+
+static int allocate_calib(slCalib& sl_calib, const slParams& sl_params)
+{
+  // allocate calibration members
+  // return -1 on error
+
+  const int cam_nelems = sl_params.cam_w * sl_params.cam_h;
+  const int proj_nelems = sl_params.proj_w * sl_params.proj_h;
+
+  sl_calib.cam_intrinsic_calib = false;
+  sl_calib.proj_intrinsic_calib = false;
+  sl_calib.procam_extrinsic_calib = false;
+  sl_calib.cam_intrinsic = cvCreateMat(3,3,CV_32FC1);
+  sl_calib.cam_distortion = cvCreateMat(5,1,CV_32FC1);
+  sl_calib.cam_extrinsic = cvCreateMat(2, 3, CV_32FC1);
+  sl_calib.proj_intrinsic = cvCreateMat(3, 3, CV_32FC1);
+  sl_calib.proj_distortion = cvCreateMat(5, 1, CV_32FC1);
+  sl_calib.proj_extrinsic = cvCreateMat(2, 3, CV_32FC1);
+  sl_calib.cam_center = cvCreateMat(3, 1, CV_32FC1);
+  sl_calib.proj_center = cvCreateMat(3, 1, CV_32FC1);
+  sl_calib.cam_rays = cvCreateMat(3, cam_nelems, CV_32FC1);
+  sl_calib.proj_rays = cvCreateMat(3, proj_nelems, CV_32FC1);
+  sl_calib.proj_column_planes = cvCreateMat(sl_params.proj_w, 4, CV_32FC1);
+  sl_calib.proj_row_planes = cvCreateMat(sl_params.proj_h, 4, CV_32FC1);
+
+  // initialize background model
+  sl_calib.background_depth_map = cvCreateMat(sl_params.cam_h, sl_params.cam_w, CV_32FC1);
+  sl_calib.background_image = cvCreateImage(cvSize(sl_params.cam_w, sl_params.cam_h), IPL_DEPTH_8U, 3);
+  sl_calib.background_mask = cvCreateImage(cvSize(sl_params.cam_w, sl_params.cam_h), IPL_DEPTH_8U, 1);
+  cvSet(sl_calib.background_depth_map, cvScalar(FLT_MAX));
+  cvZero(sl_calib.background_image);
+  cvSet(sl_calib.background_mask, cvScalar(255));
+
+  return 0;
+}
+
+
+//
+
+static int load_conf_directory
+(const std::string& dirname, slCalib& calib, slParams& params)
+{
+#if 0
+  const std::string tmpname = dirname + std::string("/calib/cam");
+#else
+  const std::string& tmpname = dirname;
+#endif
+  const std::string confname = tmpname + std::string("/config.xml");
+  const std::string distname = tmpname + std::string("/cam_distortion.xml");
+  const std::string intrname = tmpname + std::string("/cam_intrinsic.xml");
+  const std::string extrname = tmpname + std::string("/cam_extrinsic.xml");
+  const std::string rotname = tmpname + std::string("/cam_rotation_vectors.xml");
+  const std::string transname = tmpname + std::string("/cam_translation_vectors.xml");
+
+  readConfiguration(confname.c_str(), &params);
+  if (allocate_calib(calib, params) == -1) return -1;
+
+  calib.cam_intrinsic  = (CvMat*)cvLoad(intrname.c_str());
+  if (calib.cam_intrinsic == NULL) return -1;
+  calib.cam_distortion = (CvMat*)cvLoad(distname.c_str());
+  if (calib.cam_distortion == NULL) return -1;
+  calib.cam_intrinsic_calib = true;
+
+  calib.cam_extrinsic = (CvMat*)cvLoad(extrname.c_str());
+  if (calib.cam_distortion == NULL) return -1;
+  calib.procam_extrinsic_calib = true;
+  evaluateProCamGeometry(&params, &calib);
+
+  return 0;
+}
+
+
+// intersection routines
+//
+// notes on representations
+// parametric equation: define a relation as a set of eq
+// implicit equation: f(x, y) = 0
+// explicit equation: f(x) = y
+// lines and planes are described by a coeff vector w.
+//
+// line parametric form:
+// p: q + u * v
+//
+// line explicit form
+// w[0] * x + w[1] = w[2]
+//
+// line implicit form
+// w[0] * x + w[1] * y + w[2] = 0
+//
+// plane explicit form:
+// w[0] * x + w[1] * y + w[2] * z = w[3]
+//
+// plane implicit form:
+// w[0] * x + w[1] * y + w[2] * z + w[3] = 0
+//
+
+
+// define vNT, a vector N sized vector of T typed elements.
+typedef int[2] v2i_t;
+typedef double[2] v2d_t;
+typedef double[3] v3d_t;
+typedef double[4] v4d_t;
+
+static int intersect_line_line
+(v2d_t* res, const v3d_t* la, const v3d_t* lb)
+{
+  // inertsect 2 co planar lines
+  // la and lb the lines explicit forms
+  // res the 2d resulting point
+}
+
+static int intersect_line_plane
+(vec3d_t* res, const vec3_t* q, const vect3_t* v, const vect3_t* w)
+{
+  // intersect a line with a plane
+  // res the resulting point in 3d coordinates
+  // q a point of the line
+  // v the line vector
+  // w a plane in implicit form
+}
+
+
+#if 0 // fitting routines
+
+static void fit_line(void);
+static void fit_plane(void);
+
+#endif // fitting routines
+
+static double norm(const double* v, unsigned int n)
+{
+  double sum = 0;
+  for (; n; --n, ++v) sum += (*v) * (*v);
+  return sqrt(sum);
+}
+
+static void normalize
+(double* v, const int* x, double fc, double cc, double kc, double alphac)
+{
+  // TOOLBOX_calib/normalize.m
+  // TODO
+}
+
+static void pixel_to_ray
+(double* v, const int* x, double fc, double cc, double kc, double alphac)
+{
+  // compute the camera coorrdinates of the ray starting
+  // at the camera point and passing by the pixel x.
+  //
+  // v the resulting ray vector
+  // x the pixel coordinates
+  // fc, cc, kc, alphac the camera intrinsic parameters
+
+  normalize(v, fc, cc, kc, alphac);
+
+  v[0] = x[0];
+  v[1] = x[1];
+  v[2] = 1;
+}
+
+// video processing
+
+static inline int rewind_capture(CvCapture* cap)
+{
+  return cvSetCaptureProperty(cap, CV_CAP_PROP_POS_FRAMES, 0);
+}
+
+static inline unsigned int get_capture_frame_count(CvCapture* cap)
+{
+  const double count = cvGetCaptureProperty(cap, CV_CAP_PROP_POS_FRAMES);
+  return (unsigned int)count;
+}
+
+static CvSize get_capture_frame_size(CvCapture* cap)
+{
+  CvSize size;
+  IplImage* const frame = cvQueryFrame(cap);
+  size.width = 0;
+  size.height = 0;
+  if (frame == NULL) return size;
+  size.width = frame->imageWidth;
+  size.height = frame->imageHeight;
+  return size;
+} 
+
+static int estimate_shadow_thresholds
+(CvCapture* cap, CvMat* shadow_thresholds)
+{
+  // estimate invdiviual pixels shadow threshold
+  // algorithm:
+  // min_values = matrix(-inf);
+  // max_values = matrix(+inf);
+  // foreach frame
+  // . frame = rgb2gray(frame);
+  // . compute_minmax(frame, min_values, max_values);
+  // shadowValue = (min_values + max_values) / 2;
+
+  while (1)
+  {
+    IplImage* frame = cvQueryFrame(cap);
+    if (frame == NULL) break ;
+  }
+
+  rewind_capture(cap);
+
+  return -1;
+}
+
+static int estimate_shadow_planes(CvCapture* cap)
+{
+  // estimate shadow plane parameters
+  // algorithm:
+  // foreach_frame:
+  // . frame = rgb2gray(frame);
+  // . estimate vline
+  // . estimate hline
+
+  rewind_capture(cap);
+
+  return -1;
+}
+
+static int estimate_shadow_xtimes(CvCapture* cap)
+{
+  // estimate the per pixel shadow crossing time
+  // where time is the frame index. a pixel is
+  // considered entered by a shadow when its gray
+  // intensity changes from non shadow to shadow
+
+  rewind_capture(cap);
+
+  return -1;
+}
+
+static void show_estimations(CvCapture* cap)
+{
+}
+
+static void generate_depth_map(void)
+{
+}
+
+static void show_depth_map(CvMat* depth_map)
+{
+  // depth map a double matrix
+} 
+
+static void generate_points
+(scan_data_t& scan_data, std::list<v3d_t>& scan_points)
+{
+  // foreach pixel, generate the parametric ray equation
+  // and inersect with the corresponding shadow plane
+}
+
+static int do_scan(CvCapture* cap, const slCalib& calib)
+{
+  // actual scanning
+
+  CvMat* shadow_thresholds = NULL;
+  CvMat* shadow_thresholds = NULL;
+  CvMat* shadow_thresholds = NULL;
+  CvSize frame_size;
+  int err;
+
+  frame_size = get_capture_frame_size(cap);
+  ASSERT_GOTO(frame_size.width, on_error);
+
+  err = estimate_shadow_thresholds(cap, shadow_thresholds);
+  ASSERT_GOTO(err == 0, on_error);
+
+  err = estimate_shadow_planes(cap, shadow_planes);
+  ASSERT_GOTO(err == 0, on_error);
+
+  err = estimate_shadow_xtimes(cap, shadow_xtimes);
+  ASSERT_GOTO(err == 0, on_error);
+
+  show_estimations(cap);
+
+  generate_depth_map(scan_data);
+  show_depth_map(depth_map);
+
+  typedef struct scan_data;
+  std::list<v3d_t> scan_points;
+  generate_points(scan_data, scan_points);
+
+ on_error:
+  cvReleaseMat(&shadow_thresholds);
+
+  return err;
+}
+
+
+// shadow plane lines evaluation
+static void evaluate_shadow_vline(const rectangle& area)
+{
+  // area the area to look into for plane for a line
+  // note that area comes from a previous user selection
+
+  sub = substract(image, shadow_values, area);
+  for (i = 0; i < rows(tmp); ++i)
+    for (j = 1; j < cols(tmp); ++j)
+    {
+      // entering shadow
+      if ((sub[i][j] < 0) && (sub[i][j - 1] >= 0))
+	entering_cols.append(j);
+      // leaving shadow
+      else if ((sub[i][j] >= 0) && (sub[i][j - 1] < 0))
+	leaving_cols.append(j);
+    }
+}
+
+int main(int ac, char** av)
+{
+  // av[1] the data directory containting jpg sequence
+  // av[2] the configuration directory
+
+  slParams params;
+  slCalib calib;
+  const int err = load_conf_directory(std::string(av[2]), calib, params);
+  ASSERT_RETURN(err == 0, -1);
+
+  CvCapture* cap = directory_to_capture(av[1]);
+  ASSERT_RETURN(cap != NULL, -1);
+
+  do_scan(cap, calib);
+  cvReleaseCapture(&cap);
+
+  return 0;
+}
