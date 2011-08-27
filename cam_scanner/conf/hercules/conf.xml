@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <opencv_storage>
 <project>
-  <dirname>"/home/texane/tmp/scanner_conf"</dirname></project>
+  <dirname>"/home/texane/repo/scanner/cam_scanner/conf/hercules"</dirname></project>
 <camera>
   <index>1</index>
   <width>640</width>
@@ -15,4 +15,48 @@
   <chess_square_width>30</chess_square_width></calib>
 <scan>
   <frames_dirname>"scan_frames"</frames_dirname></scan>
+
+<intrinsic type_id="opencv-matrix">
+  <rows>3</rows>
+  <cols>3</cols>
+  <dt>f</dt>
+  <data>
+    9.97110229e+02 0. 3.67521576e+02 0. 1.00228577e+03 2.20856659e+02 0.
+    0. 1.</data></intrinsic>
+
+<distortion type_id="opencv-matrix">
+  <rows>5</rows>
+  <cols>1</cols>
+  <dt>f</dt>
+  <data>
+    -1.27011359e-01 -8.53909731e-01 0. 0. 0.</data></distortion>
+
+<rotation_vectors type_id="opencv-matrix">
+  <rows>10</rows>
+  <cols>3</cols>
+  <dt>f</dt>
+  <data>
+    1.87758589e+00 -1.85351729e+00 5.53225815e-01 2.00119209e+00
+    -1.76016104e+00 -9.52463269e-01 1.92993164e+00 -1.29985297e+00
+    -2.49211609e-01 1.46384752e+00 -2.18306994e+00 1.48830867e+00
+    -1.65139592e+00 1.45197308e+00 2.65538037e-01 2.17806149e+00
+    -1.21098197e+00 7.93132603e-01 1.48027456e+00 -2.20505428e+00
+    1.53092587e+00 1.47175002e+00 -1.49358630e+00 1.00436389e+00
+    -2.15940642e+00 2.16153169e+00 2.04382673e-01 -1.53049946e+00
+    1.86792934e+00 -4.81763095e-01</data></rotation_vectors>
+
+<translation_vectors type_id="opencv-matrix">
+  <rows>10</rows>
+  <cols>3</cols>
+  <dt>f</dt>
+  <data>
+    4.35699730e+01 1.19957657e+02 6.64966187e+02 6.41062927e+01
+    7.67242050e+01 5.45094849e+02 2.43036518e+01 7.52263947e+01
+    4.68552216e+02 8.62092896e+01 5.15998230e+01 5.59926208e+02
+    4.39991875e+01 3.42922325e+01 6.25760498e+02 2.53483486e+01
+    7.60039597e+01 5.02270905e+02 7.67102890e+01 5.96349030e+01
+    5.88389648e+02 5.98677101e+01 4.47238350e+01 4.79169342e+02
+    4.11043243e+01 9.89831085e+01 7.09166077e+02 -8.22214317e+00
+    9.18758011e+00 7.66980286e+02</data></translation_vectors>
+
 </opencv_storage>

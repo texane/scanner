@@ -427,8 +427,8 @@ int runProjectorCalibration(CvCapture* capture,
 	printf("+ Maximum number of images = ");
 	scanf("%d", &n_boards);
 #else
-	printf("+ Maximum number of images set to 10\n");
-	n_boards = 10;
+	n_boards = 15;
+	printf("+ Maximum number of images set to %d\n", n_boards);
 #endif
 	if(n_boards<2){
 		printf("ERROR: At least two images are required!\n");
