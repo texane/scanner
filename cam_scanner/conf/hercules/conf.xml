@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<opencv_storage>
+<project>
+  <dirname>"/home/texane/tmp/scanner_conf"</dirname></project>
+<camera>
+  <index>1</index>
+  <width>640</width>
+  <height>480</height>
+  <gain>50</gain></camera>
+<calib>
+  <frames_dirname>"calib_frames"</frames_dirname>
+  <chess_square_hcount>8</chess_square_hcount>
+  <chess_square_vcount>5</chess_square_vcount>
+  <chess_square_height>30</chess_square_height>
+  <chess_square_width>30</chess_square_width></calib>
+<scan>
+  <frames_dirname>"scan_frames"</frames_dirname></scan>
+</opencv_storage>
