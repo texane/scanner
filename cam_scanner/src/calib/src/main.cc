@@ -118,7 +118,7 @@ int main(int ac, char** av)
 {
   slParams params;
   slCalib calib;
-  readConfiguration("../conf/conf.xml", &params);
+  readConfiguration("../../../conf/hercules/xml/config.xml", &params);
   allocate_calib(calib, params);
 
 #if 1
