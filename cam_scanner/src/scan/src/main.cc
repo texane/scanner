@@ -222,7 +222,7 @@ static int get_static_user_points(user_points_t& points)
   points.vplane[1].y = 234;
 
   points.hplane[0].x = 172;
-  points.hplane[0].y = 413;
+  points.hplane[0].y = 405;
   points.hplane[1].x = 467;
   points.hplane[1].y = 462;
 
@@ -658,7 +658,14 @@ static int estimate_shadow_thresholds
     {
       const int minval = CV_MAT_ELEM(*minvals, int, i, j);
       const int maxval = CV_MAT_ELEM(*maxvals, int, i, j);
+#if CONFIG_HERCULES
+      unsigned char tmp = (minval + maxval) / 2;
+      if (tmp < (255 - 10)) tmp += 10;
+      else tmp = 255;
+      CV_MAT_ELEM(*thresholds, unsigned char, i, j) = tmp;
+#else
       CV_MAT_ELEM(*thresholds, unsigned char, i, j) = (minval + maxval) / 2;
+#endif
       CV_MAT_ELEM(*contrasts, unsigned char, i, j) = maxval - minval;
     }
 
@@ -794,7 +801,7 @@ static int estimate_shadow_xtimes
 	    CV_MAT_ELEM(*xtime_mat[k], real_type, i, j) = not_found;
 	}
 
-#if 0 // plot (entering) shadow xtimes
+#if 1 // plot (entering) shadow xtimes
   {
     IplImage* cloned_image = cvCloneImage(curr_image);
     ASSERT_GOTO(cloned_image, on_error);
@@ -878,6 +885,39 @@ static void get_shadow_points
 }
 
 
+static bool remove_outlier
+(std::list<CvPoint>& points, const real3& w)
+{
+  // y = mx + p;
+  const real_type m = -w[0] / w[1];
+  const real_type p = w[2] / w[1];
+
+  // get the maximum error
+  real_type err = 0;
+  std::list<CvPoint>::iterator pos = points.begin();
+  std::list<CvPoint>::iterator i = points.begin();
+  for (; i != points.end(); ++i)
+  {
+    const real_type y = m * (real_type)i->x + p;
+    const real_type e = y - i->y;
+    const real_type ee = e * e;
+    if (ee > err)
+    {
+      err = ee;
+      pos = i;
+    }
+  }
+
+  // error too small, done
+  if (err < 16) return false;
+
+  // delete the outlier
+  points.erase(pos);
+
+  return true;
+}
+
+
 static int fit_line(const std::list<CvPoint>& points, real3& w)
 {
   // find a line that best fits points. use least square error method.
@@ -918,8 +958,6 @@ static int fit_line(const std::list<CvPoint>& points, real3& w)
 
   const real_type a = CV_MAT_ELEM(*res, real_type, 0, 0);
   const real_type b = CV_MAT_ELEM(*res, real_type, 1, 0);
-
-  // printf("y = %lf * x + %lf\n", a, b);
 
   w[0] = a * -1;
   w[1] = 1;
@@ -1240,11 +1278,33 @@ static int estimate_shadow_lines
     line_eqs.is_valid[frame_index] = 1;
 
     // get lines equation via lse fitting method
+    // remove outliers
 
-    fit_line(shadow_points[0], line_eqs.venter[frame_index]);
-    fit_line(shadow_points[1], line_eqs.vleave[frame_index]);
-    fit_line(shadow_points[2], line_eqs.henter[frame_index]);
-    fit_line(shadow_points[3], line_eqs.hleave[frame_index]);
+    {
+      for (unsigned int i = 0; i < 4; ++i)
+      {
+	real3 w;
+
+	// work on a shadow point copy
+	std::list<CvPoint>& points = shadow_points[i];
+
+	unsigned int count = 0;
+	while (1)
+	{
+	  fit_line(points, w);
+	  if (points.size() <= 2) break ;
+	  if (remove_outlier(points, w) == false) break ;
+	  ++count;
+	}
+	printf("outlier count : %u\n", count);
+
+	// copy the line equation coeffs
+	if (i == 0) line_eqs.venter[frame_index] = w;
+	else if (i == 1) line_eqs.vleave[frame_index] = w;
+	else if (i == 2) line_eqs.henter[frame_index] = w;
+	else if (i == 3) line_eqs.hleave[frame_index] = w;
+      }
+    }
 
 #if 1 // plot the lines
     {
