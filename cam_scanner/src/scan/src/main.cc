@@ -885,6 +885,7 @@ static void get_shadow_points
 }
 
 
+#if 0
 static bool remove_outlier
 (std::list<CvPoint>& points, const real3& w)
 {
@@ -916,6 +917,70 @@ static bool remove_outlier
 
   return true;
 }
+#else
+
+static int fit_line(const std::list<CvPoint>& points, real3& w);
+
+static bool remove_outlier(std::list<CvPoint>& points)
+{
+  real_type min_sum = 42000000; // large enough for infinity
+  real_type min_ee = 0;
+  std::list<CvPoint>::iterator min_pos = points.begin();
+
+  std::list<CvPoint>::iterator pos = points.begin();
+  unsigned int i = 0;
+
+  for (; pos != points.end(); ++pos, ++i)
+  {
+    // remove the current point by overwritting it with another
+    CvPoint saved_point = *pos;
+    std::list<CvPoint>::const_iterator copied_pos = points.begin();
+    if (pos == points.begin()) ++copied_pos;
+    *pos = *copied_pos;
+
+    // lse line fitting
+    real3 w;
+    fit_line(points, w);
+
+    // y = mx + p;
+    const real_type m = -w[0] / w[1];
+    const real_type p = w[2] / w[1];
+
+    // compute the error sum
+    real_type sum = 0;
+    std::list<CvPoint>::iterator j = points.begin();
+    for (; j != points.end(); ++j)
+    {
+      const real_type x = (real_type)j->x;
+      const real_type y = m * x + p;
+      const real_type e = (real_type)j->y - y;
+      const real_type ee = e * e;
+      sum += ee;
+    }
+
+    // restore the saved point
+    *pos = saved_point;
+
+    // save if it minimizes
+    if (sum < min_sum)
+    {
+      const real_type y = m * (real_type)pos->x + p;
+      const real_type e = (real_type)pos->y - y;
+      min_ee = e * e;
+      min_sum = sum;
+      min_pos = pos;
+    }
+  }
+
+  // error too small, done
+  if (min_ee < 16) return false;
+
+  // delete the outlier
+  points.erase(min_pos);
+
+  return true;
+}
+#endif
 
 
 static int fit_line(const std::list<CvPoint>& points, real3& w)
@@ -1288,15 +1353,15 @@ static int estimate_shadow_lines
 	// work on a shadow point copy
 	std::list<CvPoint>& points = shadow_points[i];
 
-	unsigned int count = 0;
 	while (1)
 	{
-	  fit_line(points, w);
 	  if (points.size() <= 2) break ;
-	  if (remove_outlier(points, w) == false) break ;
-	  ++count;
+
+	  // if (remove_outlier(points, w) == false) break ;
+	  if (remove_outlier(points) == false) break ;
+
+	  fit_line(points, w);
 	}
-	printf("outlier count : %u\n", count);
 
 	// copy the line equation coeffs
 	if (i == 0) line_eqs.venter[frame_index] = w;
