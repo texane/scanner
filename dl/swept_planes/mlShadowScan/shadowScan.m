@@ -40,7 +40,7 @@ disp('Loading object and reconstruction parameters...');
 
 % Select which reconstruction script to use.
 %addpath('./data/demo/');      demo_v1;
-addpath('./data/man/');      man_v1;
+%addpath('./data/man/');      man_v1;
 %addpath('./data/man/');      man_v2;
 %addpath('./data/frog/');     frog_v1;
 %addpath('./data/frog/');     frog_v2;
@@ -49,6 +49,7 @@ addpath('./data/man/');      man_v1;
 %addpath('./data/schooner/'); schooner_v1;
 %addpath('./data/urn/');      urn_v1;
 %addpath('./data/yong/');     yong_v1;
+addpath('./data/cup/');      cup;
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
